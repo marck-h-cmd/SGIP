@@ -1,0 +1,73 @@
+{
+  "sector": "Moche",
+  "dma_code": "DMA-MO-01",
+  "informacion_general": {
+    "distrito": "Moche",
+    "provincia": "Trujillo",
+    "departamento": "La Libertad",
+    "poblacion": 18000,
+    "viviendas": 4500,
+    "presion_promedio": 55.2,
+    "caudal_promedio": 25.4
+  },
+  "ubicacion": {
+    "latitud": -8.1243,
+    "longitud": -79.0142,
+    "referencia": "Zona urbana de Moche, cerca a la plaza de armas"
+  },
+  "sensores": [
+    {
+      "codigo": "SENS-MO-01-P",
+      "tipo": "PRESION",
+      "unidad": "MCA",
+      "ubicacion": "Av. Pumacahua 123",
+      "estado": "ACTIVO"
+    },
+    {
+      "codigo": "SENS-MO-01-F",
+      "tipo": "CAUDAL",
+      "unidad": "LPS",
+      "ubicacion": "Av. Pumacahua 123",
+      "estado": "ACTIVO"
+    }
+  ],
+  "puntos_criticos": [
+    {
+      "nombre": "Av. Pumacahua",
+      "tipo": "Zona residencial",
+      "riesgo": "MEDIO"
+    },
+    {
+      "nombre": "Calle Bolívar",
+      "tipo": "Zona comercial",
+      "riesgo": "ALTO"
+    },
+    {
+      "nombre": "Av. Moche",
+      "tipo": "Vía principal",
+      "riesgo": "MEDIO"
+    }
+  ],
+  "historial_fugas": [
+    {
+      "fecha": "2026-06-15",
+      "ubicacion": "Av. Pumacahua 456",
+      "tipo": "Rotura de tubería",
+      "tiempo_reparacion": 4.5,
+      "volumen_perdido": 120
+    },
+    {
+      "fecha": "2026-06-28",
+      "ubicacion": "Calle Bolívar 789",
+      "tipo": "Fuga en conexión",
+      "tiempo_reparacion": 2.0,
+      "volumen_perdido": 45
+    }
+  ],
+  "configuracion_operativa": {
+    "horario_atencion": "24/7",
+    "tiempo_respuesta_promedio": 45,
+    "equipo_asignado": "Equipo Moche",
+    "supervisor": "Ing. Carlos Reyes"
+  }
+}
