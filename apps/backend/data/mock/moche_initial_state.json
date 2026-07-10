@@ -1,0 +1,21 @@
+{
+  "sector": "Moche",
+  "dma_code": "DMA-MO-01",
+  "generated_at": "2026-07-10T17:08:29.174783",
+  "status": "OPERATIONAL",
+  "scenarios_count": 5,
+  "sensors": [
+    {
+      "code": "SENS-MO-01-P",
+      "type": "PRESSURE",
+      "unit": "MCA",
+      "status": "ACTIVE"
+    },
+    {
+      "code": "SENS-MO-01-F",
+      "type": "FLOW",
+      "unit": "LPS",
+      "status": "ACTIVE"
+    }
+  ]
+}

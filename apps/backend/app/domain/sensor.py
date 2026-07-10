@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class Sensor(BaseModel):
@@ -18,8 +18,9 @@ class Sensor(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
             "example": {
                 "code": "SENS-EP-01",
                 "dma_id": "DMA-EP-01",
@@ -29,3 +30,4 @@ class Sensor(BaseModel):
                 "status": "ACTIVE"
             }
         }
+    )

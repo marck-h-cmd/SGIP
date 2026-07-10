@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 
 
@@ -43,8 +43,7 @@ class IncidentTicket(BaseModel):
     response_time_minutes: Optional[int] = None
     resolution_time_minutes: Optional[int] = None
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(from_attributes=True, json_schema_extra={
             "example": {
                 "code": "INC-20260709-001",
                 "anomaly_id": 1,
@@ -58,3 +57,4 @@ class IncidentTicket(BaseModel):
                 "sla_due_at": "2026-07-09T14:30:00"
             }
         }
+    )

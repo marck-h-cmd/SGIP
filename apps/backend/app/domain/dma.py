@@ -1,6 +1,7 @@
+from pydantic import ConfigDict
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class DMA(BaseModel):
@@ -16,9 +17,9 @@ class DMA(BaseModel):
     population_served: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
             "example": {
                 "code": "DMA-EP-01",
                 "name": "El Porvenir 01",
@@ -28,6 +29,7 @@ class DMA(BaseModel):
                 "status": "ACTIVE"
             }
         }
+    )
 
 
 class DMAStatus(BaseModel):

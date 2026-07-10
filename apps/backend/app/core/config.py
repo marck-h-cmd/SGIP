@@ -1,3 +1,4 @@
+from pydantic_settings import SettingsConfigDict
 from pydantic_settings import BaseSettings
 from typing import List, Optional
 
@@ -32,9 +33,10 @@ class Settings(BaseSettings):
     target_dma: str = "DMA-MO-01"  # Enfocado en Moche
     target_dma_name: str = "Moche 01"
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False
+    )
 
 
 settings = Settings()

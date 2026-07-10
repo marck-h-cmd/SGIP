@@ -1,0 +1,47 @@
+{
+  "sector": "Moche",
+  "dma_code": "DMA-MO-01",
+  "generated_at": "2026-07-10T17:08:29.171353",
+  "scenarios": [
+    {
+      "name": "moche_normal_day",
+      "file": "moche_normal_day_20260710_170829.csv",
+      "type": "normal",
+      "description": "D\u00eda normal en Moche sin anomal\u00edas",
+      "duration_hours": 24,
+      "severity": 0.0
+    },
+    {
+      "name": "moche_leak_event",
+      "file": "moche_leak_event_20260710_170829.csv",
+      "type": "leak",
+      "description": "Fuga en Moche - Zona de Av. Pumacahua",
+      "duration_hours": 24,
+      "severity": 0.7
+    },
+    {
+      "name": "moche_night_flow",
+      "file": "moche_night_flow_20260710_170829.csv",
+      "type": "night",
+      "description": "Anomal\u00eda de flujo nocturno en Moche",
+      "duration_hours": 12,
+      "severity": 0.5
+    },
+    {
+      "name": "moche_pressure_drop",
+      "file": "moche_pressure_drop_20260710_170829.csv",
+      "type": "pressure",
+      "description": "Ca\u00edda de presi\u00f3n en Moche - Sector Urbano",
+      "duration_hours": 8,
+      "severity": 0.6
+    },
+    {
+      "name": "moche_false_positive",
+      "file": "moche_false_positive_20260710_170829.csv",
+      "type": "false",
+      "description": "Ruido de sensor en Moche - Falso positivo controlado",
+      "duration_hours": 4,
+      "severity": 0.3
+    }
+  ]
+}

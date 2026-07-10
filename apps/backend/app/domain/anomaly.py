@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 
 
@@ -35,8 +35,9 @@ class Anomaly(BaseModel):
     confirmed_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
             "example": {
                 "telemetry_id": 1,
                 "dma_id": "DMA-EP-01",
@@ -49,3 +50,4 @@ class Anomaly(BaseModel):
                 "estimated_loss_volume": 45.6
             }
         }
+    )

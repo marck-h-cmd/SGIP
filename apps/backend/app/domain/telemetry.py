@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class TelemetryReading(BaseModel):
@@ -18,8 +18,9 @@ class TelemetryReading(BaseModel):
     status: str = Field(default="ACTIVE", max_length=20)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
             "example": {
                 "timestamp": "2026-07-09T10:30:00",
                 "dma_id": "DMA-EP-01",
@@ -31,6 +32,7 @@ class TelemetryReading(BaseModel):
                 "quality_flag": "GOOD"
             }
         }
+    )
 
 
 class TelemetryBatch(BaseModel):

@@ -16,6 +16,23 @@ from app.core.exceptions import SGIPCAPException
 from app.infrastructure.database import db
 from app.websocket.websocket_handler import WebSocketHandler
 from datetime import datetime
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database and services on startup, and clean up on shutdown"""
+    # Startup
+    db.create_tables()
+    print("🚀 SGIP-CAP API - Sector Moche")
+    print(f"📍 DMA objetivo: {settings.target_dma}")
+    print(f"📊 Data Provider: {settings.data_provider}")
+    print(f"🎯 Anomaly Threshold: {settings.anomaly_threshold}")
+    print("✅ API iniciada correctamente")
+    
+    yield
+    
+    # Shutdown
+    print("SGIP-CAP API shutting down...")
 
 # Create FastAPI app
 app = FastAPI(
@@ -23,7 +40,8 @@ app = FastAPI(
     description="Sistema de Gestión Integral de Pérdidas - Sector Moche",
     version="1.0.0",
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
+    lifespan=lifespan
 )
 
 # Configure CORS
@@ -67,23 +85,7 @@ async def sgipcap_exception_handler(request, exc: SGIPCAPException):
     )
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database and services on startup"""
-    # Create database tables
-    db.create_tables()
-    
-    print("🚀 SGIP-CAP API - Sector Moche")
-    print(f"📍 DMA objetivo: {settings.target_dma}")
-    print(f"📊 Data Provider: {settings.data_provider}")
-    print(f"🎯 Anomaly Threshold: {settings.anomaly_threshold}")
-    print("✅ API iniciada correctamente")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up on shutdown"""
-    print("SGIP-CAP API shutting down...")
+# Included routers later...
 
 
 @app.get("/")
