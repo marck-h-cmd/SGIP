@@ -19,6 +19,8 @@ class IsolationForestModel:
         self.threshold = settings.anomaly_threshold
         self.is_trained = False
         self.feature_columns = ['pressure_mca', 'flow_lps', 'hour', 'day_of_week']
+        self.train_min_score = None
+        self.train_max_score = None
     
     def train(self, readings: List[TelemetryReading]) -> None:
         """Train the Isolation Forest model"""
@@ -39,6 +41,11 @@ class IsolationForestModel:
             )
             self.model.fit(X)
             self.is_trained = True
+            
+            # Calculate and store bounds for normalization
+            train_decision_scores = self.model.decision_function(X)
+            self.train_min_score = float(np.min(train_decision_scores))
+            self.train_max_score = float(np.max(train_decision_scores))
             
         except Exception as e:
             raise MLException(f"Error training model: {str(e)}")
@@ -80,13 +87,14 @@ class IsolationForestModel:
             
             # Normalize to [0, 1] where higher = more anomalous
             # This uses the fact that decision_function returns negative for anomalies
-            min_score = np.min(decision_scores)
-            max_score = np.max(decision_scores)
+            min_score = self.train_min_score if self.train_min_score is not None else np.min(decision_scores)
+            max_score = self.train_max_score if self.train_max_score is not None else np.max(decision_scores)
             
             if max_score > min_score:
                 # Normalize so that lower scores are higher anomalies
                 normalized = 1 - ((decision_scores - min_score) / (max_score - min_score))
-                return float(normalized[0])
+                final_score = float(normalized[0])
+                return max(0.0, min(1.0, final_score))
             else:
                 return 0.5
             

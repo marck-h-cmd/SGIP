@@ -45,8 +45,11 @@ export const api = {
   },
   telemetry: {
     latest: () => fetchJson<TelemetryReading[]>('/telemetry/latest'),
-    history: (dmaId: string, hours = 24) =>
-      fetchJson<TelemetryReading[]>(`/telemetry/history/${dmaId}?hours=${hours}`),
+    history: (dmaId: string, hours = 24) => {
+      const end = new Date();
+      const start = new Date(end.getTime() - hours * 3600 * 1000);
+      return fetchJson<any>(`/telemetry/history/${dmaId}?start_date=${start.toISOString()}&end_date=${end.toISOString()}`);
+    },
     trends: (dmaId: string) => fetchJson<TelemetryReading[]>(`/telemetry/trends/${dmaId}`),
     mocheLatest: () => fetchJson<TelemetryReading>('/telemetry/moche/latest'),
     mocheTrends: () => fetchJson<TelemetryReading[]>('/telemetry/moche/trends'),
@@ -56,6 +59,7 @@ export const api = {
       fetchJson<Record<string, unknown>>(dmaId ? `/anomalies/dma/${dmaId}` : '/anomalies/recent'),
     mocheRecent: () => fetchJson<Record<string, unknown>>('/anomalies/moche/recent'),
     mocheStats: () => fetchJson<Record<string, unknown>>('/anomalies/moche/stats'),
+    simulate: () => fetchJson<Record<string, unknown>>('/anomalies/simulate', { method: 'POST' }),
   },
   incidents: {
     list: (dmaId?: string) => {
