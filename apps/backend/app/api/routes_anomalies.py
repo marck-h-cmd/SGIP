@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.services.anomaly_service import AnomalyService
 from app.services.telemetry_service import TelemetryService
 from app.domain.telemetry import TelemetryReading
@@ -17,6 +17,44 @@ async def analyze_reading(
     """Analyze a single reading for anomalies"""
     result = service.analyze_reading(reading)
     return result
+
+@router.post("/simulate")
+async def simulate_anomaly(
+    service: AnomalyService = Depends()
+):
+    """Inject a simulated critical anomaly with randomized critical-range values"""
+    import random
+    from app.core.config import settings
+
+    # Pick one of several realistic critical-failure scenarios
+    scenario = random.choice([
+        # Scenario 1: Major pressure drop (pipe burst / major leak)
+        {"pressure": round(random.uniform(10.0, 28.0), 1), "flow": round(random.uniform(20.0, 30.0), 1)},
+        # Scenario 2: Flow surge (clandestine connection / meter bypass)
+        {"pressure": round(random.uniform(48.0, 60.0), 1), "flow": round(random.uniform(46.0, 72.0), 1)},
+        # Scenario 3: Combined anomaly (pressure drop + flow spike)
+        {"pressure": round(random.uniform(15.0, 27.0), 1), "flow": round(random.uniform(50.0, 68.0), 1)},
+        # Scenario 4: Near-critical low pressure (gradual leak)
+        {"pressure": round(random.uniform(20.0, 29.5), 1), "flow": round(random.uniform(28.0, 35.0), 1)},
+    ])
+
+    reading = TelemetryReading(
+        timestamp=datetime.utcnow(),
+        dma_id=settings.target_dma,
+        dma_name="Moche",
+        sensor_id="SENS-MO-SIM",
+        pressure_mca=scenario["pressure"],
+        flow_lps=scenario["flow"],
+        source="simulation",
+        quality_flag="GOOD"
+    )
+    result = service.analyze_reading(reading)
+    # Attach the simulated values for frontend awareness
+    return {
+        **result,
+        "simulated_pressure": scenario["pressure"],
+        "simulated_flow": scenario["flow"],
+    }
 
 
 @router.post("/analyze/batch")
@@ -106,12 +144,39 @@ async def get_anomaly_stats(
         [{"anomaly": a.get("anomaly")} for a in recent if a.get("anomaly")]
     ) if recent else {}
     
+    # Get anomalies from last 7 days for history
+    recent_7d = service.get_recent_anomalies(dma_id, hours=168)
+    
+    # Group by day
+    counts_by_date = {}
+    now = datetime.utcnow()
+    for i in range(6, -1, -1):
+        d = now - timedelta(days=i)
+        date_str = d.strftime("%Y-%m-%d")
+        day_str = d.strftime("%a")
+        es_days = {"Mon": "lun", "Tue": "mar", "Wed": "mié", "Thu": "jue", "Fri": "vie", "Sat": "sáb", "Sun": "dom"}
+        counts_by_date[date_str] = {"dia": es_days.get(day_str, day_str), "anomalias": 0}
+        
+    for a in recent_7d:
+        anom = a.get("anomaly")
+        if anom and anom.detected_at:
+            date_str = anom.detected_at.strftime("%Y-%m-%d")
+            if date_str in counts_by_date:
+                counts_by_date[date_str]["anomalias"] += 1
+    
+    history_7d = list(counts_by_date.values())
+    
+    from app.core.config import settings
+    
     return {
         "total_anomalies_24h": len(recent),
         "severity_distribution": severity_dist,
         "avg_score": sum(a.get("score", 0) for a in recent) / len(recent) if recent else 0,
         "high_priority_count": len([a for a in recent if a.get("severity") in ["HIGH", "CRITICAL"]]),
-        "critical_count": len([a for a in recent if a.get("severity") == "CRITICAL"])
+        "critical_count": len([a for a in recent if a.get("severity") == "CRITICAL"]),
+        "history_7d": history_7d,
+        "threshold": settings.anomaly_threshold,
+        "features": ['Presión (MCA)', 'Caudal (LPS)', 'Hora del día', 'Día de la semana']
     }
 
 

@@ -80,6 +80,7 @@ class ReportService:
                 "open": len([i for i in incidents if i.status.value not in ["CLOSED", "RESOLVED"]]),
                 "resolved": len([i for i in incidents if i.status.value in ["RESOLVED", "CLOSED"]])
             },
+            "readings": [{"timestamp": r.timestamp.isoformat(), "pressure_mca": r.pressure_mca, "flow_lps": r.flow_lps, "is_anomaly": False} for r in readings],
             "generated_at": datetime.utcnow().isoformat()
         }
     
@@ -129,8 +130,10 @@ class ReportService:
             },
             "dma": settings.target_dma,
             "daily_stats": daily_stats,
+            "total_readings": len(readings),
             "total_anomalies": len(anomalies),
             "total_incidents": len(incidents),
+            "water_loss_estimate": round(sum(a.get("anomaly").estimated_loss_volume for a in anomalies if a.get("anomaly") and a.get("anomaly").estimated_loss_volume), 2),
             "anomaly_trend": self._calculate_trend(anomalies),
             "incident_trend": self._calculate_incident_trend(incidents),
             "generated_at": datetime.utcnow().isoformat()
@@ -143,9 +146,10 @@ class ReportService:
         
         # Group by day
         daily_counts = {}
-        for anomaly in anomalies:
-            date = anomaly.get("timestamp", "").split("T")[0] if anomaly.get("timestamp") else ""
-            if date:
+        for item in anomalies:
+            anomaly = item.get("anomaly")
+            if anomaly and anomaly.detected_at:
+                date = anomaly.detected_at.strftime("%Y-%m-%d")
                 daily_counts[date] = daily_counts.get(date, 0) + 1
         
         if len(daily_counts) < 2:

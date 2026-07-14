@@ -69,21 +69,30 @@ class AnomalyService:
             is_anomaly = reading.pressure_mca < 40.0 or reading.flow_lps > 35.0
             score = 0.8 if is_anomaly else 0.2
 
+        # Override ML model for extreme threshold breaches
+        # (Isolation Forest may fail to score points far outside its training bounding box)
+        if reading.pressure_mca < 40.0 or reading.flow_lps > 35.0:
+            is_anomaly = True
+            if score < 0.8:
+                score = 1.0  # Force a high score for extreme breaches
+
         anomaly_domain = None
         if is_anomaly:
-            severity = AnomalySeverity.MEDIUM
+            # Severity based on physical thresholds (ordered from most to least severe)
             if reading.pressure_mca < 30.0 or reading.flow_lps > 45.0:
                 severity = AnomalySeverity.CRITICAL
             elif reading.pressure_mca < 35.0 or reading.flow_lps > 40.0:
                 severity = AnomalySeverity.HIGH
-            elif reading.pressure_mca < 45.0:
+            elif reading.pressure_mca < 45.0 or reading.flow_lps > 35.0:
+                severity = AnomalySeverity.MEDIUM
+            else:
                 severity = AnomalySeverity.LOW
 
-            # Calculate variations
+            # Calculate variations vs. normal baseline
             pressure_var = reading.pressure_mca - 55.2
             flow_var = reading.flow_lps - 25.4
             
-            # Loss estimation: flow diff * 3600 liters per hour
+            # Loss estimation: excess flow * 3600 sec (liters per hour) / 1000 → m³
             loss_estimate = max(0.0, flow_var) * 3.6 if flow_var > 0 else 0.0
 
             # Save model to database
