@@ -9,7 +9,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.simulation.scenario_generator import ScenarioGenerator
 from app.providers.mock_provider import MockTelemetryProvider
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+# Zona horaria de Perú (UTC-5)
+PERU_TZ = timezone(timedelta(hours=-5))
 
 
 def generate_moche_data():
@@ -38,7 +41,7 @@ def generate_moche_data():
     initial_state = {
         "sector": "Moche",
         "dma_code": "DMA-MO-01",
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(PERU_TZ).isoformat(),
         "status": "OPERATIONAL",
         "scenarios_count": len(exported),
         "sensors": [

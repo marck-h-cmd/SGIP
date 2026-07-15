@@ -66,14 +66,14 @@ export default function MonitoringPage() {
     if (Array.isArray(t.pressure) && Array.isArray(t.flow)) {
       const pressureMap = new Map(t.pressure.map((p: any) => [p.timestamp, p.value]));
       chartData = t.flow.map((f: any) => ({
-        time: new Date(f.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+        time: new Date(f.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
         presion: pressureMap.get(f.timestamp) ?? 0,
         caudal: f.value ?? 0,
       }));
     }
   } else if (Array.isArray(trends)) {
     chartData = trends.map((t: any) => ({
-      time: new Date(t.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+      time: new Date(t.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
       presion: t.pressure_mca, caudal: t.flow_lps,
     }));
   }
@@ -132,7 +132,7 @@ export default function MonitoringPage() {
             <AreaChart data={chartData.length > 0 ? chartData : [{ time: '--', presion: 0, caudal: 0 }]}>
               <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0d6ebd" stopOpacity={0.2} /><stop offset="95%" stopColor="#0d6ebd" stopOpacity={0} /></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="time" fontSize={11} tickLine={false} />
+              <XAxis dataKey="time" fontSize={11} tickLine={false} interval={12} />
               <YAxis fontSize={11} tickLine={false} />
               <Tooltip />
               <Area type="monotone" dataKey="presion" stroke="#0d6ebd" strokeWidth={2} fill="url(#pg)" name="Presión (MCA)" />
@@ -145,7 +145,7 @@ export default function MonitoringPage() {
             <AreaChart data={chartData.length > 0 ? chartData : [{ time: '--', presion: 0, caudal: 0 }]}>
               <defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.2} /><stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} /></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="time" fontSize={11} tickLine={false} />
+              <XAxis dataKey="time" fontSize={11} tickLine={false} interval={12} />
               <YAxis fontSize={11} tickLine={false} />
               <Tooltip />
               <Area type="monotone" dataKey="caudal" stroke="#0ea5e9" strokeWidth={2} fill="url(#fg)" name="Caudal (LPS)" />

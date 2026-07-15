@@ -1,11 +1,14 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from app.providers.base_provider import TelemetryProvider
-from app.providers.mock_provider import MockTelemetryProvider
+from app.providers.mock_provider import MockTelemetryProvider, mock_provider
 from app.providers.csv_provider import CSVTelemetryProvider
 from app.providers.scada_export_provider import SCADAExportProvider
 from app.domain.telemetry import TelemetryReading
 from app.core.config import settings
+
+# Zona horaria de Perú (UTC-5)
+PERU_TZ = timezone(timedelta(hours=-5))
 
 
 class TelemetryService:
@@ -20,13 +23,13 @@ class TelemetryService:
         provider_type = settings.data_provider.lower()
         
         if provider_type == "mock":
-            return MockTelemetryProvider()
+            return mock_provider  # Usar singleton
         elif provider_type == "csv":
             return CSVTelemetryProvider(settings.csv_data_path)
         elif provider_type == "scada":
             return SCADAExportProvider(settings.csv_data_path)
         else:
-            return MockTelemetryProvider()
+            return mock_provider  # Usar singleton
     
     def get_latest_readings(self, dma_id: Optional[str] = None) -> List[TelemetryReading]:
         """Get latest readings - siempre enfocado en Moche si no se especifica"""
@@ -108,7 +111,7 @@ class TelemetryService:
     
     def get_dma_trends(self, dma_id: str, hours: int = 24) -> Dict[str, List[Dict[str, Any]]]:
         """Get pressure and flow trends"""
-        end_date = datetime.utcnow()
+        end_date = datetime.now(PERU_TZ)
         start_date = end_date - timedelta(hours=hours)
         
         readings = self.get_historical_readings(dma_id, start_date, end_date)

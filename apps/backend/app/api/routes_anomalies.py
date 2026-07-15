@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.services.anomaly_service import AnomalyService
 from app.services.telemetry_service import TelemetryService
 from app.domain.telemetry import TelemetryReading
 from app.core.exceptions import NotFoundException
+
+from app.api.dependencies import get_anomaly_service
+
+# Zona horaria de Perú (UTC-5)
+PERU_TZ = timezone(timedelta(hours=-5))
 
 router = APIRouter(prefix="/api/anomalies", tags=["Anomalies"])
 
@@ -12,7 +17,7 @@ router = APIRouter(prefix="/api/anomalies", tags=["Anomalies"])
 @router.post("/analyze")
 async def analyze_reading(
     reading: TelemetryReading,
-    service: AnomalyService = Depends()
+    service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Analyze a single reading for anomalies"""
     result = service.analyze_reading(reading)
@@ -20,7 +25,7 @@ async def analyze_reading(
 
 @router.post("/simulate")
 async def simulate_anomaly(
-    service: AnomalyService = Depends()
+    service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Inject a simulated critical anomaly with randomized critical-range values"""
     import random
@@ -39,7 +44,7 @@ async def simulate_anomaly(
     ])
 
     reading = TelemetryReading(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(PERU_TZ),
         dma_id=settings.target_dma,
         dma_name="Moche",
         sensor_id="SENS-MO-SIM",
@@ -78,7 +83,7 @@ async def analyze_batch(
 async def analyze_dma(
     dma_id: str,
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
-    service: AnomalyService = Depends()
+    service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Analyze a DMA for anomalies"""
     result = service.analyze_dma(dma_id, hours)
@@ -90,7 +95,7 @@ async def analyze_dma(
 @router.get("/moche/analyze")
 async def analyze_moche(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
-    service: AnomalyService = Depends()
+    service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Analyze Moche sector for anomalies"""
     from app.core.config import settings
@@ -105,7 +110,7 @@ async def get_recent_anomalies(
     dma_id: Optional[str] = Query(None, description="Filter by DMA ID"),
     hours: int = Query(24, ge=1, le=168, description="Hours to look back"),
     limit: int = Query(100, le=500, description="Limit results"),
-    service: AnomalyService = Depends()
+    service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Get recent anomalies"""
     anomalies = service.get_recent_anomalies(dma_id, hours)
@@ -119,7 +124,7 @@ async def get_recent_anomalies(
 async def get_moche_recent_anomalies(
     hours: int = Query(24, ge=1, le=168, description="Hours to look back"),
     limit: int = Query(100, le=500, description="Limit results"),
-    service: AnomalyService = Depends()
+    service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Get recent anomalies for Moche sector"""
     from app.core.config import settings
@@ -134,7 +139,7 @@ async def get_moche_recent_anomalies(
 @router.get("/stats")
 async def get_anomaly_stats(
     dma_id: Optional[str] = Query(None, description="Filter by DMA ID"),
-    service: AnomalyService = Depends()
+    service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Get anomaly statistics"""
     # Get anomalies from last 24 hours
@@ -149,7 +154,7 @@ async def get_anomaly_stats(
     
     # Group by day
     counts_by_date = {}
-    now = datetime.utcnow()
+    now = datetime.now(PERU_TZ)
     for i in range(6, -1, -1):
         d = now - timedelta(days=i)
         date_str = d.strftime("%Y-%m-%d")
@@ -182,7 +187,7 @@ async def get_anomaly_stats(
 
 @router.get("/moche/stats")
 async def get_moche_anomaly_stats(
-    service: AnomalyService = Depends()
+    service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Get anomaly statistics for Moche sector"""
     from app.core.config import settings
@@ -192,7 +197,7 @@ async def get_moche_anomaly_stats(
 @router.get("/{anomaly_id}")
 async def get_anomaly_detail(
     anomaly_id: int,
-    service: AnomalyService = Depends()
+    service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Get detailed information about a specific anomaly"""
     # Get recent anomalies and find the specific one

@@ -18,12 +18,12 @@ export default function DmaDetailPage() {
 
   const isLoading = dmaLoading || metLoading;
   const dmaAnomalies = anomalies?.anomalies ? anomalies.anomalies.filter((a: any) => (a.anomaly?.dma_id || a.dma_id) === id) : [];
-  const dmaHistory = Array.isArray(history) ? history : [];
+  const dmaHistory = history?.readings || [];
   const sensors = sensorsData?.sensors || [];
   const incidentList = Array.isArray(incidents) ? incidents : [];
 
   const chartData = dmaHistory.length > 0
-    ? dmaHistory.map((r) => ({ time: new Date(r.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }), presion: r.pressure_mca, caudal: r.flow_lps }))
+    ? dmaHistory.map((r) => ({ time: new Date(r.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }), presion: r.pressure_mca, caudal: r.flow_lps }))
     : [];
 
   if (!id) return null;
@@ -66,7 +66,7 @@ export default function DmaDetailPage() {
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="time" fontSize={11} tickLine={false} />
+                <XAxis dataKey="time" fontSize={11} tickLine={false} interval={12} />
                 <YAxis fontSize={11} tickLine={false} />
                 <Tooltip />
                 <Line type="monotone" dataKey="presion" stroke="#0d6ebd" strokeWidth={2} dot={false} name="Presión (MCA)" />
@@ -80,7 +80,7 @@ export default function DmaDetailPage() {
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="time" fontSize={11} tickLine={false} />
+                <XAxis dataKey="time" fontSize={11} tickLine={false} interval={12} />
                 <YAxis fontSize={11} tickLine={false} />
                 <Tooltip />
                 <Line type="monotone" dataKey="caudal" stroke="#0ea5e9" strokeWidth={2} dot={false} name="Caudal (LPS)" />

@@ -16,7 +16,7 @@ from app.services.alert_service import AlertService
 class AnomalyService:
     """Service to handle anomaly detection logic"""
 
-    def __init__(self, db_session: Session = Depends(db.get_db)):
+    def __init__(self, db_session=None, telemetry_service=None):
         from fastapi.params import Depends as DependsClass
         if isinstance(db_session, DependsClass) or db_session is None:
             self.db = db.SessionLocal()
@@ -24,10 +24,16 @@ class AnomalyService:
             self.db = db_session
         self.anomaly_repo = AnomalyRepository(self.db)
         self.telemetry_repo = TelemetryRepository(self.db)
+        
+        if isinstance(telemetry_service, DependsClass) or telemetry_service is None:
+            from app.services.telemetry_service import TelemetryService
+            self.telemetry_service = TelemetryService()
+        else:
+            self.telemetry_service = telemetry_service
+            
         self.alert_service = AlertService()
         self.ml_model = IsolationForestModel()
         
-        # Self-train model with dummy data if not trained
         self._initialize_model()
 
     def _initialize_model(self):
@@ -139,14 +145,15 @@ class AnomalyService:
         """Analyze a whole DMA history for anomalies"""
         end = datetime.utcnow()
         start = end - timedelta(hours=hours)
-        readings = self.telemetry_repo.get_history(dma_id, start, end)
+        # Usar el servicio de telemetría (que usa el proveedor mock con caché)
+        readings = self.telemetry_service.get_historical_readings(dma_id, start, end)
         
         anomalies_found = []
         for r in readings:
             reading_domain = TelemetryReading(
                 timestamp=r.timestamp,
                 dma_id=r.dma_id,
-                dma_name="Moche",
+                dma_name=r.dma_name,
                 sensor_id=r.sensor_id,
                 pressure_mca=r.pressure_mca,
                 flow_lps=r.flow_lps,

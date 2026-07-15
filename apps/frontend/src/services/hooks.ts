@@ -18,7 +18,7 @@ export function useDmaMetrics(id: string) {
 }
 
 export function useLatestTelemetry() {
-  return useQuery({ queryKey: ['telemetry-latest'], queryFn: api.telemetry.latest, refetchInterval: 15000 });
+  return useQuery({ queryKey: ['telemetry-latest'], queryFn: api.telemetry.latest, refetchInterval: 60000 });
 }
 
 export function useTelemetryHistory(dmaId: string, hours = 24) {
@@ -30,11 +30,11 @@ export function useTelemetryHistory(dmaId: string, hours = 24) {
 }
 
 export function useMocheTrends() {
-  return useQuery({ queryKey: ['moche-trends'], queryFn: api.telemetry.mocheTrends, refetchInterval: 30000 });
+  return useQuery({ queryKey: ['moche-trends'], queryFn: api.telemetry.mocheTrends, refetchInterval: 60000 });
 }
 
 export function useRecentAnomalies() {
-  return useQuery({ queryKey: ['anomalies-recent'], queryFn: api.anomalies.mocheRecent, refetchInterval: 30000 });
+  return useQuery({ queryKey: ['anomalies-recent'], queryFn: api.anomalies.mocheRecent, refetchInterval: 60000 });
 }
 
 export function useAnomalyStats() {
@@ -57,11 +57,11 @@ export function useUpdateIncidentStatus() {
 }
 
 export function useExecutiveKpis() {
-  return useQuery({ queryKey: ['kpis-executive'], queryFn: api.kpis.executive, refetchInterval: 30000 });
+  return useQuery({ queryKey: ['kpis-executive'], queryFn: api.kpis.executive, refetchInterval: 60000 });
 }
 
 export function useAlerts() {
-  return useQuery({ queryKey: ['alerts'], queryFn: api.alerts.list, refetchInterval: 15000 });
+  return useQuery({ queryKey: ['alerts'], queryFn: api.alerts.list, refetchInterval: 60000 });
 }
 
 export function useAcknowledgeAlert() {

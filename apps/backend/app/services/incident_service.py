@@ -16,7 +16,7 @@ from app.core.exceptions import NotFoundException, ValidationException
 class IncidentService:
     """Service to manage ITIL incident tickets and SLA compliance"""
 
-    def __init__(self, db_session: Session = Depends(db.get_db)):
+    def __init__(self, db_session=None):
         from fastapi.params import Depends as DependsClass
         if isinstance(db_session, DependsClass) or db_session is None:
             self.db = db.SessionLocal()

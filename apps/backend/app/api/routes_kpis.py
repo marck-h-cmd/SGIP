@@ -1,14 +1,20 @@
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
+from datetime import datetime, timedelta, timezone
 from app.services.kpi_service import KPIService
 from app.core.config import settings
+
+from app.api.dependencies import get_kpi_service
+
+# Zona horaria de Perú (UTC-5)
+PERU_TZ = timezone(timedelta(hours=-5))
 
 router = APIRouter(prefix="/api/kpis", tags=["KPIs"])
 
 
 @router.get("/executive")
 async def get_executive_kpis(
-    service: KPIService = Depends()
+    service: KPIService = Depends(get_kpi_service)
 ):
     """Get executive dashboard KPIs"""
     return service.get_executive_kpis()
@@ -16,7 +22,7 @@ async def get_executive_kpis(
 
 @router.get("/moche/executive")
 async def get_moche_executive_kpis(
-    service: KPIService = Depends()
+    service: KPIService = Depends(get_kpi_service)
 ):
     """Get executive dashboard KPIs focused on Moche"""
     kpis = service.get_executive_kpis()
@@ -33,7 +39,7 @@ async def get_moche_executive_kpis(
 @router.get("/dma/{dma_id}")
 async def get_dma_metrics(
     dma_id: str,
-    service: KPIService = Depends()
+    service: KPIService = Depends(get_kpi_service)
 ):
     """Get metrics for a specific DMA"""
     return service.get_dma_metrics(dma_id)
@@ -41,7 +47,7 @@ async def get_dma_metrics(
 
 @router.get("/moche/metrics")
 async def get_moche_metrics(
-    service: KPIService = Depends()
+    service: KPIService = Depends(get_kpi_service)
 ):
     """Get metrics specifically for Moche sector"""
     return service.get_dma_metrics(settings.target_dma)
@@ -49,7 +55,7 @@ async def get_moche_metrics(
 
 @router.get("/dmas/all")
 async def get_all_dma_metrics(
-    service: KPIService = Depends()
+    service: KPIService = Depends(get_kpi_service)
 ):
     """Get metrics for all DMAs"""
     dmas = service.telemetry_service.get_all_dmas()
@@ -65,7 +71,7 @@ async def get_all_dma_metrics(
 async def get_water_loss_metrics(
     dma_id: Optional[str] = Query(None, description="Filter by DMA ID"),
     days: int = Query(30, ge=1, le=365, description="Days to analyze"),
-    service: KPIService = Depends()
+    service: KPIService = Depends(get_kpi_service)
 ):
     """Get water loss metrics"""
     if dma_id:
@@ -93,7 +99,7 @@ async def get_water_loss_metrics(
 @router.get("/moche/water-loss")
 async def get_moche_water_loss(
     days: int = Query(30, ge=1, le=365, description="Days to analyze"),
-    service: KPIService = Depends()
+    service: KPIService = Depends(get_kpi_service)
 ):
     """Get water loss metrics for Moche sector"""
     metrics = service.get_dma_metrics(settings.target_dma)
@@ -109,7 +115,7 @@ async def get_moche_water_loss(
 
 @router.get("/sla-compliance")
 async def get_sla_compliance(
-    service: KPIService = Depends()
+    service: KPIService = Depends(get_kpi_service)
 ):
     """Get SLA compliance metrics"""
     from app.services.incident_service import IncidentService
@@ -119,7 +125,7 @@ async def get_sla_compliance(
 
 @router.get("/moche/sla-compliance")
 async def get_moche_sla_compliance(
-    service: KPIService = Depends()
+    service: KPIService = Depends(get_kpi_service)
 ):
     """Get SLA compliance metrics for Moche sector"""
     from app.services.incident_service import IncidentService
@@ -128,7 +134,7 @@ async def get_moche_sla_compliance(
     
     # Filter for Moche
     tickets = incident_service.get_all_tickets(dma_id=settings.target_dma)
-    moche_breached = len([t for t in tickets if datetime.utcnow() > t.sla_due_at])
+    moche_breached = len([t for t in tickets if datetime.now(PERU_TZ) > t.sla_due_at])
     
     return {
         **metrics,

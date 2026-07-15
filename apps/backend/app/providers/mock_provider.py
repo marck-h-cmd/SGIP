@@ -1,29 +1,34 @@
-from datetime import datetime, timedelta
-from typing import List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional, Dict
 import random
 import numpy as np
 from app.providers.base_provider import TelemetryProvider
 from app.domain.telemetry import TelemetryReading
 from app.core.config import settings
 
+# Zona horaria de Perú (UTC-5)
+PERU_TZ = timezone(timedelta(hours=-5))
+
 
 class MockTelemetryProvider(TelemetryProvider):
     """Mock data provider enfocado en Moche"""
-    
+
+    PRESSURE_BASELINE = 55.2  # MCA
+    FLOW_BASELINE = 25.4      # LPS
+
     def __init__(self):
-        # Solo un DMA: Moche
         self.dmas = [{
             "code": "DMA-MO-01",
             "name": "Moche 01",
             "district": "Moche",
             "latitude": -8.1243,
             "longitude": -79.0142,
-            "base_pressure": 55.2,
-            "base_flow": 25.4,
+            "base_pressure": self.PRESSURE_BASELINE,
+            "base_flow": self.FLOW_BASELINE,
             "population": 18000,
             "description": "Sector Moche - Zona urbana principal"
         }]
-        
+
         self.sensors = [
             {
                 "code": "SENS-MO-01-P",
@@ -46,14 +51,16 @@ class MockTelemetryProvider(TelemetryProvider):
                 "longitude": -79.0140
             }
         ]
-        self._current_time = datetime.utcnow()
         self._base_readings = self._generate_base_readings()
         self._leak_scenario_active = False
         self._leak_start_time = None
         self._leak_severity = 0.0
-    
+
+        self._historical_cache: Dict[str, List[TelemetryReading]] = {}
+        self._last_reading_time: Dict[str, datetime] = {}
+        self._initialize_historical_cache()
+
     def _generate_base_readings(self):
-        """Generar lecturas base para Moche"""
         readings = []
         for dma in self.dmas:
             readings.append({
@@ -65,87 +72,121 @@ class MockTelemetryProvider(TelemetryProvider):
                 "source": "MOCK"
             })
         return readings
-    
-    def _add_daily_variation(self, value, variation_percent=0.05):
-        """Agregar variación diaria realista"""
-        hour = datetime.utcnow().hour
-        # Patrón diario: mayor consumo durante el día, menor en la noche
-        day_factor = 1.0 + 0.1 * np.sin((hour - 6) * np.pi / 12)
-        random_noise = 1.0 + random.uniform(-variation_percent, variation_percent)
-        return value * day_factor * random_noise
-    
-    def _simulate_leak(self, pressure, flow):
-        """Simular efectos de una fuga"""
+
+    def _round_time(self, dt: Optional[datetime] = None) -> datetime:
+        """Redondear datetime al intervalo de lectura más cercano hacia abajo"""
+        if dt is None:
+            dt = datetime.now(PERU_TZ)
+        minute = (dt.minute // settings.reading_interval_minutes) * settings.reading_interval_minutes
+        return dt.replace(minute=minute, second=0, microsecond=0)
+
+    def _initialize_historical_cache(self):
+        """Inicializar caché con 24h de datos alineados a la grilla de intervalos"""
+        now = self._round_time()
+        start = now - timedelta(hours=24)
+        interval = timedelta(minutes=settings.reading_interval_minutes)
+
+        for dma in self.dmas:
+            dma_id = dma["code"]
+            readings = []
+            current = start
+            while current <= now:
+                readings.append(self._generate_reading_at_time(dma, current))
+                current += interval
+            self._historical_cache[dma_id] = readings
+            self._last_reading_time[dma_id] = now
+
+    def _generate_reading_at_time(self, dma: dict, timestamp: datetime) -> TelemetryReading:
+        """Generar lectura realista con patrón diario de consumo"""
+        hour = timestamp.hour + (timestamp.minute / 60.0)
+
+        # Patrón diario de consumo (agua):
+        #   - Mínimo nocturno ~3-5 AM (40% del caudal base)
+        #   - Pico matutino ~8-9 AM
+        #   - Pico vespertino ~7-8 PM
+        #   - La presión varía inversamente con el caudal (~4%)
+        angle = (hour - 7.0) * np.pi / 12.0
+        flow_factor = 1.0 + 0.45 * np.sin(angle) + 0.10 * np.sin(2 * angle)
+        pressure_factor = 1.0 - 0.04 * np.sin(angle)
+
+        raw_flow = dma["base_flow"] * flow_factor + random.gauss(0, 0.4)
+        raw_pressure = dma["base_pressure"] * pressure_factor + random.gauss(0, 0.3)
+
+        quality = "SUSPICIOUS" if random.random() < 0.005 else "GOOD"
+
+        return TelemetryReading(
+            timestamp=timestamp,
+            dma_id=dma["code"],
+            dma_name=dma["name"],
+            sensor_id="SENS-MO-01-P",
+            pressure_mca=round(max(25, raw_pressure), 1),
+            flow_lps=round(max(8, raw_flow), 1),
+            source="MOCK",
+            quality_flag=quality
+        )
+
+    def _simulate_leak(self, dma: dict) -> bool:
+        """Activar/desactivar simulación de fuga y devolver True si está activa"""
         if not self._leak_scenario_active:
-            # Activar fuga aleatoriamente (10% de probabilidad por actualización)
-            if random.random() < 0.02:  # 2% de probabilidad de iniciar fuga
+            if random.random() < 0.003:
                 self._leak_scenario_active = True
-                self._leak_start_time = datetime.utcnow()
-                self._leak_severity = random.uniform(0.4, 0.9)
-                print(f"🔴 FUGA DETECTADA en Moche - Severidad: {self._leak_severity:.2f}")
-        
-        if self._leak_scenario_active:
-            # Calcular tiempo de fuga
-            elapsed_minutes = (datetime.utcnow() - self._leak_start_time).total_seconds() / 60
-            
-            if elapsed_minutes > 60:  # Fuga dura 1 hora
-                self._leak_scenario_active = False
-                self._leak_start_time = None
-                self._leak_severity = 0.0
-                print("✅ Fuga resuelta en Moche")
-                return pressure, flow
-            
-            # Efectos progresivos de la fuga
-            progress = min(1.0, elapsed_minutes / 60)
-            intensity = progress * self._leak_severity
-            
-            # Caída de presión y aumento de caudal
-            pressure_loss = min(pressure * 0.15 * intensity, 12.0)
-            flow_increase = min(flow * 0.25 * intensity, 18.0)
-            
-            pressure -= pressure_loss
-            flow += flow_increase
-            
-        return pressure, flow
-    
+                self._leak_start_time = datetime.now(PERU_TZ)
+                self._leak_severity = random.uniform(0.3, 0.8)
+            return False
+
+        elapsed = (datetime.now(PERU_TZ) - self._leak_start_time).total_seconds() / 60
+        if elapsed > 45:
+            self._leak_scenario_active = False
+            self._leak_start_time = None
+            self._leak_severity = 0.0
+            return False
+        return True
+
     def get_latest_readings(self, dma_id: Optional[str] = None) -> List[TelemetryReading]:
-        """Obtener lecturas más recientes con variaciones realistas"""
-        readings = []
-        
-        selected_dmas = self.dmas
-        if dma_id:
-            selected_dmas = [d for d in self.dmas if d["code"] == dma_id]
-        
-        for dma in selected_dmas:
-            # Agregar variaciones diarias y aleatorias
-            pressure = self._add_daily_variation(dma["base_pressure"])
-            flow = self._add_daily_variation(dma["base_flow"])
-            
-            # Simular fuga
-            pressure, flow = self._simulate_leak(pressure, flow)
-            
-            # Determinar calidad
-            quality_flag = "GOOD"
-            if self._leak_scenario_active:
-                quality_flag = "ANOMALY"
-            elif random.random() < 0.01:  # 1% de ruido
-                quality_flag = "SUSPICIOUS"
-                pressure *= random.uniform(0.95, 1.05)
-                flow *= random.uniform(0.95, 1.05)
-            
-            reading = TelemetryReading(
-                timestamp=self._current_time,
-                dma_id=dma["code"],
-                dma_name=dma["name"],
-                sensor_id="SENS-MO-01-P",
-                pressure_mca=round(max(10, pressure), 1),
-                flow_lps=round(max(5, flow), 1),
-                source="MOCK",
-                quality_flag=quality_flag
-            )
-            readings.append(reading)
-        
-        return readings
+        """Obtener última lectura y agregar nuevos puntos pendientes al caché"""
+        current_time = self._round_time()
+        interval = timedelta(minutes=settings.reading_interval_minutes)
+
+        selected = [d for d in self.dmas if dma_id is None or d["code"] == dma_id]
+
+        for dma in selected:
+            last_time = self._last_reading_time.get(dma["code"])
+
+            # Si no hay registro previo, usar la hora actual - 24h
+            if last_time is None:
+                last_time = current_time - timedelta(hours=24)
+
+            # Generar todos los puntos faltantes desde last_time hasta current_time
+            next_time = last_time + interval
+            leak_active = self._simulate_leak(dma)
+            while next_time <= current_time:
+                r = self._generate_reading_at_time(dma, next_time)
+                if leak_active and next_time >= self._leak_start_time:
+                    elapsed = (next_time - self._leak_start_time).total_seconds() / 60
+                    progress = min(1.0, elapsed / 45)
+                    intensity = progress * self._leak_severity
+                    r = TelemetryReading(
+                        timestamp=r.timestamp,
+                        dma_id=r.dma_id,
+                        dma_name=r.dma_name,
+                        sensor_id=r.sensor_id,
+                        pressure_mca=round(max(25, r.pressure_mca - min(r.pressure_mca * 0.18 * intensity, 14.0)), 1),
+                        flow_lps=round(max(8, r.flow_lps + min(r.flow_lps * 0.30 * intensity, 20.0)), 1),
+                        source="MOCK",
+                        quality_flag="ANOMALY"
+                    )
+                self._historical_cache.setdefault(dma["code"], []).append(r)
+                next_time += interval
+
+            self._last_reading_time[dma["code"]] = current_time
+
+        # Devolver la última lectura de cada DMA solicitado
+        result = []
+        for dma in selected:
+            cache = self._historical_cache.get(dma["code"], [])
+            if cache:
+                result.append(cache[-1])
+        return result
     
     def get_historical_readings(
         self,
@@ -154,66 +195,28 @@ class MockTelemetryProvider(TelemetryProvider):
         end_date: datetime,
         limit: int = 1000
     ) -> List[TelemetryReading]:
-        """Generar lecturas históricas para Moche"""
-        dma = next((d for d in self.dmas if d["code"] == dma_id), None)
-        if not dma:
-            return []
+        """Obtener lecturas históricas del caché"""
+        # Asegurar que las fechas tengan timezone
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=PERU_TZ)
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=PERU_TZ)
         
-        readings = []
-        current_date = start_date
-        interval = timedelta(minutes=15)
-        count = 0
+        cache = self._historical_cache.get(dma_id, [])
         
-        while current_date <= end_date and count < limit:
-            hour = current_date.hour
-            day_factor = 1.0 + 0.1 * np.sin((hour - 6) * np.pi / 12)
-            random_noise = 1.0 + random.uniform(-0.03, 0.03)
-            
-            pressure = dma["base_pressure"] * day_factor * random_noise
-            flow = dma["base_flow"] * day_factor * random_noise
-            
-            # Simular eventos históricos
-            quality = "GOOD"
-            
-            # Fuga simulada en un punto específico
-            if (current_date - start_date).total_seconds() > 18000 and \
-               (current_date - start_date).total_seconds() < 25200:  # 5-7 horas después
-                pressure *= 0.8
-                flow *= 1.3
-                quality = "ANOMALY"
-                print(f"📊 Evento histórico: Fuga en {current_date}")
-            
-            reading = TelemetryReading(
-                timestamp=current_date,
-                dma_id=dma["code"],
-                dma_name=dma["name"],
-                sensor_id="SENS-MO-01-P",
-                pressure_mca=round(max(10, pressure), 1),
-                flow_lps=round(max(5, flow), 1),
-                source="MOCK",
-                quality_flag=quality
-            )
-            readings.append(reading)
-            
-            current_date += interval
-            count += 1
+        # Filtrar por rango de fechas
+        filtered = [
+            r for r in cache
+            if start_date <= r.timestamp <= end_date
+        ]
         
-        return readings
+        return filtered[-limit:]
     
     def get_reading_by_id(self, reading_id: int) -> Optional[TelemetryReading]:
-        """Obtener lectura por ID"""
-        if 1 <= reading_id <= 1000:
-            dma = self.dmas[0]
-            return TelemetryReading(
-                timestamp=self._current_time - timedelta(minutes=random.randint(1, 60)),
-                dma_id=dma["code"],
-                dma_name=dma["name"],
-                sensor_id="SENS-MO-01-P",
-                pressure_mca=dma["base_pressure"] * (1 + random.uniform(-0.1, 0.1)),
-                flow_lps=dma["base_flow"] * (1 + random.uniform(-0.1, 0.1)),
-                source="MOCK",
-                quality_flag="GOOD"
-            )
+        """Obtener lectura por ID del caché"""
+        cache = self._historical_cache.get("DMA-MO-01", [])
+        if 0 <= reading_id < len(cache):
+            return cache[reading_id]
         return None
     
     def get_dma_info(self, dma_id: str) -> Optional[dict]:
@@ -226,12 +229,12 @@ class MockTelemetryProvider(TelemetryProvider):
         return [d.copy() for d in self.dmas]
     
     def get_dma_stats(self, dma_id: str, period_days: int = 1) -> dict:
-        """Obtener estadísticas para Moche"""
+        """Obtener estadísticas para Moche desde el caché"""
         dma = next((d for d in self.dmas if d["code"] == dma_id), None)
         if not dma:
             return {}
         
-        end_date = datetime.utcnow()
+        end_date = datetime.now(PERU_TZ)
         start_date = end_date - timedelta(days=period_days)
         readings = self.get_historical_readings(dma_id, start_date, end_date, limit=10000)
         
@@ -262,3 +265,7 @@ class MockTelemetryProvider(TelemetryProvider):
             "period_end": end_date,
             "has_leak": self._leak_scenario_active
         }
+
+
+# Singleton instance para mantener caché entre requests
+mock_provider = MockTelemetryProvider()

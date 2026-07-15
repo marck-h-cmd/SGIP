@@ -15,9 +15,9 @@ export default function DashboardPage() {
   const { data: trends } = useMocheTrends();
   const navigate = useNavigate();
 
-  const criticalAlerts = alerts?.anomalies ? alerts.anomalies.filter((a: any) => a.severity === 'CRITICAL' && !a.acknowledged) : [];
-  const criticalCount = Array.isArray(criticalAlerts) ? criticalAlerts.length : 0;
-  const activeIncidents = Array.isArray(incidents) ? incidents.filter((i) => !['RESOLVED', 'CLOSED'].includes(i.status)).length : 0;
+  const criticalAlerts = Array.isArray(alerts) ? alerts.filter((a: any) => a.severity === 'CRITICAL' && !a.acknowledged) : [];
+  const criticalCount = criticalAlerts.length;
+  const activeIncidents = kpis?.active_incidents ?? (Array.isArray(incidents) ? incidents.filter((i) => !['RESOLVED', 'CLOSED'].includes(i.status)).length : 0);
   const latest = Array.isArray(readings) ? readings[0] : null;
   const anomalyList = anomalies?.anomalies || [];
   const incidentList = Array.isArray(incidents) ? incidents : [];
@@ -28,14 +28,14 @@ export default function DashboardPage() {
     if (Array.isArray(t.pressure) && Array.isArray(t.flow)) {
       const pressureMap = new Map(t.pressure.map((p: any) => [p.timestamp, p.value]));
       chartData = t.flow.map((f: any) => ({
-        time: new Date(f.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+        time: new Date(f.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
         presion: pressureMap.get(f.timestamp) ?? 0,
         caudal: f.value ?? 0,
       }));
     }
   } else if (Array.isArray(trends)) {
     chartData = trends.map((t: any) => ({
-      time: new Date(t.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+      time: new Date(t.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
       presion: t.pressure_mca, caudal: t.flow_lps,
     }));
   }
@@ -65,7 +65,7 @@ export default function DashboardPage() {
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="time" fontSize={12} tickLine={false} />
+              <XAxis dataKey="time" fontSize={12} tickLine={false} interval={12} />
               <YAxis yAxisId="left" fontSize={12} tickLine={false} />
               <YAxis yAxisId="right" orientation="right" fontSize={12} tickLine={false} />
               <Tooltip />

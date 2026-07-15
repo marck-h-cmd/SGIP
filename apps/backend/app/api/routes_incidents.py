@@ -6,6 +6,7 @@ from app.services.anomaly_service import AnomalyService
 from app.domain.incident import IncidentStatus, IncidentPriority
 from app.schemas.incident_schema import IncidentCreate, IncidentUpdate, IncidentResponse
 from app.core.exceptions import NotFoundException, ValidationException
+from app.api.dependencies import get_incident_service, get_anomaly_service
 
 router = APIRouter(prefix="/api/incidents", tags=["Incidents"])
 
@@ -13,8 +14,8 @@ router = APIRouter(prefix="/api/incidents", tags=["Incidents"])
 @router.post("/create")
 async def create_incident(
     incident_data: IncidentCreate,
-    incident_service: IncidentService = Depends(),
-    anomaly_service: AnomalyService = Depends()
+    incident_service: IncidentService = Depends(get_incident_service),
+    anomaly_service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Create an incident from an anomaly"""
     # Get anomaly
@@ -35,8 +36,8 @@ async def create_incident(
 @router.post("/create-from-anomaly/{anomaly_id}")
 async def create_incident_from_anomaly(
     anomaly_id: int,
-    incident_service: IncidentService = Depends(),
-    anomaly_service: AnomalyService = Depends()
+    incident_service: IncidentService = Depends(get_incident_service),
+    anomaly_service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Create an incident directly from an anomaly ID"""
     anomalies = anomaly_service.get_recent_anomalies(hours=168)
@@ -60,7 +61,7 @@ async def get_incidents(
     priority: Optional[IncidentPriority] = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0),
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Get incidents with filters"""
     tickets = service.get_all_tickets(status, dma_id, priority, limit, offset)
@@ -73,7 +74,7 @@ async def get_moche_incidents(
     priority: Optional[IncidentPriority] = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0),
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Get incidents for Moche sector"""
     from app.core.config import settings
@@ -88,7 +89,7 @@ async def get_moche_incidents(
 @router.get("/{ticket_id}")
 async def get_incident(
     ticket_id: int,
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Get a specific incident"""
     ticket = service.get_ticket(ticket_id)
@@ -100,7 +101,7 @@ async def get_incident(
 @router.get("/code/{code}")
 async def get_incident_by_code(
     code: str,
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Get an incident by its code"""
     ticket = service.get_ticket_by_code(code)
@@ -114,7 +115,7 @@ async def update_incident_status(
     ticket_id: int,
     status: IncidentStatus,
     notes: Optional[str] = None,
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Update incident status"""
     try:
@@ -128,7 +129,7 @@ async def update_incident_status(
 async def assign_incident(
     ticket_id: int,
     assigned_to: str,
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Assign an incident to someone"""
     try:
@@ -142,7 +143,7 @@ async def assign_incident(
 async def resolve_incident(
     ticket_id: int,
     resolution_notes: Optional[str] = None,
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Resolve an incident"""
     try:
@@ -155,7 +156,7 @@ async def resolve_incident(
 @router.post("/{ticket_id}/close")
 async def close_incident(
     ticket_id: int,
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Close an incident"""
     try:
@@ -167,7 +168,7 @@ async def close_incident(
 
 @router.get("/sla/metrics")
 async def get_sla_metrics(
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Get SLA metrics"""
     return service.get_sla_metrics()
@@ -175,7 +176,7 @@ async def get_sla_metrics(
 
 @router.get("/moche/sla-metrics")
 async def get_moche_sla_metrics(
-    service: IncidentService = Depends()
+    service: IncidentService = Depends(get_incident_service)
 ):
     """Get SLA metrics for Moche sector"""
     metrics = service.get_sla_metrics()

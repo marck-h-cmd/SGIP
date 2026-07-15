@@ -1,9 +1,12 @@
 import random
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 from app.domain.telemetry import TelemetryReading
 from app.core.config import settings
+
+# Zona horaria de Perú (UTC-5)
+PERU_TZ = timezone(timedelta(hours=-5))
 
 class HydraulicSimulator:
     """Hydraulic simulator to generate realistic operational scenarios"""
@@ -22,14 +25,15 @@ class HydraulicSimulator:
     ) -> List[TelemetryReading]:
         """Generate a list of telemetry readings representing a hydraulic scenario"""
         readings = []
-        now = datetime.utcnow()
+        now = datetime.now(PERU_TZ)
         start_time = now - timedelta(hours=duration_hours)
         
-        # We generate a reading every 15 minutes (4 readings per hour)
-        intervals = duration_hours * 4
+        # We generate a reading every 5 minutes (12 readings per hour)
+        readings_per_hour = 60 // settings.reading_interval_minutes
+        intervals = duration_hours * readings_per_hour
         
         for i in range(intervals):
-            current_time = start_time + timedelta(minutes=15 * i)
+            current_time = start_time + timedelta(minutes=settings.reading_interval_minutes * i)
             hour_of_day = current_time.hour + (current_time.minute / 60.0)
             
             # 1. Daily diurnal curve effect (diurnal consumption pattern)

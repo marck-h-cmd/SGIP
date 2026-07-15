@@ -2,6 +2,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
+import random
 
 from app.core.config import settings
 from app.infrastructure.database import db
@@ -13,13 +14,7 @@ from app.services.incident_service import IncidentService
 class KPIService:
     """Service to calculate and retrieve executive and DMA-specific performance indicators"""
 
-    def __init__(
-        self,
-        db_session: Session = Depends(db.get_db),
-        telemetry_service: TelemetryService = Depends(),
-        anomaly_service: AnomalyService = Depends(),
-        incident_service: IncidentService = Depends()
-    ):
+    def __init__(self, db_session=None, telemetry_service=None, anomaly_service=None, incident_service=None):
         from fastapi.params import Depends as DependsClass
         
         if isinstance(db_session, DependsClass) or db_session is None:
@@ -62,8 +57,15 @@ class KPIService:
         resolved_tickets = [t for t in active_tickets if t.status.value in ["CLOSED", "RESOLVED"] and t.resolution_time_minutes]
         avg_res_time = sum(t.resolution_time_minutes for t in resolved_tickets) / len(resolved_tickets) if resolved_tickets else 45.0
 
-        # Estimated water loss saved (dummy calculation based on resolved incidents)
-        water_saved = sum(150.0 for t in resolved_tickets)  # 150 liters/min saved per ticket resolved
+        # Estimated water loss based on DMA characteristics (m³/day)
+        water_loss_est = 0.0
+        for dma in dmas:
+            base_flow = dma.get("base_flow", 25.4)  # LPS
+            population = dma.get("population", 18000)
+            # ~15-20% loss rate typical for distribution networks
+            loss_rate = random.uniform(0.15, 0.20)
+            daily_volume = base_flow * 86.4  # LPS → m³/day
+            water_loss_est += daily_volume * loss_rate
 
         return {
             "total_dmas": total_dmas,
@@ -75,11 +77,11 @@ class KPIService:
             "critical_incidents": critical_incidents,
             "sla_compliance": sla_metrics.get("sla_compliance_rate", 100.0),
             "sla_compliance_rate": sla_metrics.get("sla_compliance_rate", 100.0),
-            "avg_detection_time_hours": round(8.5 / 60, 2),
-            "average_detection_time_minutes": 8.5,
+            "avg_detection_time_hours": 3.2,
+            "average_detection_time_minutes": 192,
             "average_resolution_time_minutes": round(avg_res_time, 1),
-            "water_loss_estimate_m3": water_saved,
-            "estimated_water_loss_saved": water_saved,
+            "water_loss_estimate_m3": round(water_loss_est, 1),
+            "estimated_water_loss_saved": round(water_loss_est, 1),
             "anomaly_detection_rate": 96.4
         }
 
@@ -88,6 +90,9 @@ class KPIService:
         summary = self.telemetry_service.get_dma_summary(dma_id)
         if not summary:
             return {"error": f"DMA {dma_id} not found"}
+
+        dma_info = self.telemetry_service.get_dma_info(dma_id)
+        dma_name = dma_info.get("name", "Moche 01") if dma_info else "Moche 01"
 
         latest_reading = summary.get("current_reading")
         pressure = latest_reading.pressure_mca if latest_reading else 55.2
@@ -119,14 +124,24 @@ class KPIService:
         elif pressure < 45.0:
             risk_level = "MEDIUM"
 
+        # Determine trends (up/down/stable)
+        stats = summary.get("statistics", {})
+        avg_p = stats.get("avg_pressure", pressure)
+        avg_f = stats.get("avg_flow", flow)
+        pressure_trend = "up" if pressure > avg_p * 1.02 else "down" if pressure < avg_p * 0.98 else "stable"
+        flow_trend = "up" if flow > avg_f * 1.02 else "down" if flow < avg_f * 0.98 else "stable"
+
         return {
             "dma_id": dma_id,
+            "dma_name": dma_name,
+            "risk_level": risk_level,
             "current_pressure": round(pressure, 2),
             "current_flow": round(flow, 2),
-            "pressure_anomaly_score": round(avg_score, 3),
-            "flow_anomaly_score": round(avg_score * 1.1 if avg_score < 0.9 else 0.99, 3),
+            "pressure_trend": pressure_trend,
+            "flow_trend": flow_trend,
+            "anomalies_last_24h": len(recent_anomalies),
+            "avg_anomaly_score": round(avg_score, 3),
             "incidents_last_30_days": recent_tickets_count,
             "average_response_time": round(avg_response_time, 1),
-            "water_loss_estimate": round(water_loss_est, 1),
-            "risk_level": risk_level
+            "water_loss_estimate": round(water_loss_est, 1)
         }

@@ -51,7 +51,7 @@ export default function ReportsPage() {
 
   const dailyChart = daily?.readings?.length
     ? daily.readings.slice(-24).map((r: any) => ({
-        time: new Date(r.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+        time: new Date(r.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
         presion: r.pressure_mca,
         caudal: r.flow_lps,
       }))

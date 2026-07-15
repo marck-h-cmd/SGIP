@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     target_dma: str = "DMA-MO-01"  # Enfocado en Moche
     target_dma_name: str = "Moche 01"
     
+    # Intervalo de lecturas de presión y caudal (minutos)
+    reading_interval_minutes: int = 5
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

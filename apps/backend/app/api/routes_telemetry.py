@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from app.services.telemetry_service import TelemetryService
 from app.schemas.telemetry_schema import (
     TelemetryResponse,
@@ -9,6 +9,9 @@ from app.schemas.telemetry_schema import (
     TelemetryFilter
 )
 from app.core.exceptions import NotFoundException
+
+# Zona horaria de Perú (UTC-5)
+PERU_TZ = timezone(timedelta(hours=-5))
 
 router = APIRouter(prefix="/api/telemetry", tags=["Telemetry"])
 
@@ -72,7 +75,7 @@ async def get_dma_summary(
         max_flow_24h=stats.get("max_flow"),
         min_flow_24h=stats.get("min_flow"),
         sample_count_24h=stats.get("sample_count", 0),
-        last_update=datetime.utcnow()
+        last_update=datetime.now(PERU_TZ)
     )
 
 

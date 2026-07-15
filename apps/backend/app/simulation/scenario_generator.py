@@ -1,9 +1,12 @@
 import json
 import csv
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from app.simulation.hydraulic_simulator import HydraulicSimulator
+
+# Zona horaria de Perú (UTC-5)
+PERU_TZ = timezone(timedelta(hours=-5))
 
 
 class ScenarioGenerator:
@@ -75,7 +78,7 @@ class ScenarioGenerator:
             readings = data["readings"]
             metadata = data["metadata"]
             
-            filename = f"{name}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+            filename = f"{name}_{datetime.now(PERU_TZ).strftime('%Y%m%d_%H%M%S')}.csv"
             filepath = os.path.join(self.output_dir, filename)
             
             with open(filepath, 'w', newline='') as csvfile:
@@ -113,7 +116,7 @@ class ScenarioGenerator:
         metadata = {
             "sector": "Moche",
             "dma_code": "DMA-MO-01",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(PERU_TZ).isoformat(),
             "scenarios": []
         }
         
