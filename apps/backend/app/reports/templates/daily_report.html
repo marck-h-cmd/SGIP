@@ -1,0 +1,167 @@
+{% extends "base_report.html" %}
+
+{% block title %}Reporte Diario - {{ report.period_start.strftime("%d/%m/%Y") }}{% endblock %}
+
+{% block report_title %}Reporte Diario Operacional{% endblock %}
+
+{% block report_subtitle %}
+DMA: {{ report.dma_id }} - {{ report.dma_name }} | 
+Fecha: {{ report.period_start.strftime("%d/%m/%Y") }}
+{% endblock %}
+
+{% block content %}
+<!-- KPI Cards -->
+<div class="section">
+    <div class="section-title">Indicadores Clave del Dia</div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.total_readings }}</div>
+            <div class="metric-label">Lecturas Totales</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.avg_pressure }} mca</div>
+            <div class="metric-label">Presion Promedio</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.avg_flow }} LPS</div>
+            <div class="metric-label">Caudal Promedio</div>
+        </div>
+    </div>
+</div>
+
+<!-- Water Loss and NRW -->
+<div class="section">
+    <div class="section-title">Indicadores de Perdidas</div>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+        <div class="metric-card{% if summary.nrw_percentage > 25 %} warning{% endif %}">
+            <div class="metric-value">{{ summary.nrw_percentage }}%</div>
+            <div class="metric-label">Perdidas No Renumeradas (NRW)</div>
+        </div>
+        <div class="metric-card{% if summary.water_loss_m3 > 100 %} warning{% endif %}">
+            <div class="metric-value">{{ summary.water_loss_m3 }} m³</div>
+            <div class="metric-label">Perdidas de Agua (m³/dia)</div>
+        </div>
+    </div>
+</div>
+
+<!-- Anomalies Summary -->
+<div class="section">
+    <div class="section-title">Resumen de Anomalias</div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+        <div class="metric-card">
+            <div class="metric-value">{{ details.anomalies_breakdown.total }}</div>
+            <div class="metric-label">Total</div>
+        </div>
+        <div class="metric-card{% if details.anomalies_breakdown.critical > 0 %} warning{% endif %}">
+            <div class="metric-value">{{ details.anomalies_breakdown.critical }}</div>
+            <div class="metric-label">Criticas</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ details.anomalies_breakdown.high }}</div>
+            <div class="metric-label">Altas</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ details.anomalies_breakdown.medium + details.anomalies_breakdown.low }}</div>
+            <div class="metric-label">Medias/Bajas</div>
+        </div>
+    </div>
+</div>
+
+<!-- Incidents Summary -->
+<div class="section">
+    <div class="section-title">Resumen de Incidencias</div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+        <div class="metric-card">
+            <div class="metric-value">{{ details.incidents_breakdown.total }}</div>
+            <div class="metric-label">Total Creadas</div>
+        </div>
+        <div class="metric-card{% if details.incidents_breakdown.open > 0 %} warning{% endif %}">
+            <div class="metric-value">{{ details.incidents_breakdown.open }}</div>
+            <div class="metric-label">Abiertas</div>
+        </div>
+        <div class="metric-card success">
+            <div class="metric-value">{{ details.incidents_breakdown.resolved }}</div>
+            <div class="metric-label">Resueltas</div>
+        </div>
+    </div>
+    
+    {% if details.incidents_breakdown.critical_open > 0 %}
+    <div class="warning" style="margin-top: 15px;">
+        <strong>ALERTA:</strong> Hay {{ details.incidents_breakdown.critical_open }} incidencia(s) critica(s) abierta(s) que requieren atencion inmediata.
+    </div>
+    {% endif %}
+</div>
+
+<!-- Pressure and Flow Ranges -->
+<div class="section">
+    <div class="section-title">Rangos Operativos del Dia</div>
+    <table>
+        <tr>
+            <th>Parametro</th>
+            <th>Minimo</th>
+            <th>Promedio</th>
+            <th>Maximo</th>
+            <th>Estado</th>
+        </tr>
+        <tr>
+            <td>Presion (mca)</td>
+            <td>{{ details.pressure_stats.min }}</td>
+            <td>{{ summary.avg_pressure }}</td>
+            <td>{{ details.pressure_stats.max }}</td>
+            <td>{% if details.pressure_stats.max > 80 or details.pressure_stats.min < 20 %}Fuera de rango{% else %}Normal{% endif %}</td>
+        </tr>
+        <tr>
+            <td>Caudal (LPS)</td>
+            <td>{{ details.flow_stats.min }}</td>
+            <td>{{ summary.avg_flow }}</td>
+            <td>{{ details.flow_stats.max }}</td>
+            <td>{% if details.flow_stats.max > 50 %}Alto{% else %}Normal{% endif %}</td>
+        </tr>
+    </table>
+</div>
+
+<!-- Readings Table (First 20) -->
+{% if details.readings %}
+<div class="section">
+    <div class="section-title">Muestra de Lecturas (Primeras 20)</div>
+    <table>
+        <tr>
+            <th>Hora</th>
+            <th>Presion (mca)</th>
+            <th>Caudal (LPS)</th>
+            <th>Estado</th>
+        </tr>
+        {% for reading in details.readings[:20] %}
+        <tr>
+            <td>{{ reading.timestamp.split('T')[1][:8] }}</td>
+            <td>{{ reading.pressure_mca }}</td>
+            <td>{{ reading.flow_lps }}</td>
+            <td>{% if reading.is_anomaly %}Anomalia{% else %}Normal{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+<!-- Recommendations -->
+<div class="section">
+    <div class="section-title">Recomendaciones</div>
+    <div class="info">
+        {% if summary.nrw_percentage > 25 %}
+        <p><strong>ALTO NRW:</strong> Se recomienda investigar las causas de las perdidas no renumeradas superiores al 25%.</p>
+        {% endif %}
+        
+        {% if details.anomalies_breakdown.critical > 0 %}
+        <p><strong>ANOMALIAS CRITICAS:</strong> Se requiere revision inmediata de las {{ details.anomalies_breakdown.critical }} anomalias criticas detectadas.</p>
+        {% endif %}
+        
+        {% if details.incidents_breakdown.open > 5 %}
+        <p><strong>INCIENCIAS PENDIENTES:</strong> Hay {{ details.incidents_breakdown.open }} incidencias abiertas. Se recomienda priorizar su resolucion.</p>
+        {% endif %}
+        
+        {% if summary.nrw_percentage <= 15 and details.anomalies_breakdown.critical == 0 %}
+        <p><strong>ESTADO NORMAL:</strong> Los indicadores estan dentro de rangos aceptables. Mantener monitoreo.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

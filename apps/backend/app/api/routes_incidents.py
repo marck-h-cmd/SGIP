@@ -4,7 +4,10 @@ from datetime import datetime
 from app.services.incident_service import IncidentService
 from app.services.anomaly_service import AnomalyService
 from app.domain.incident import IncidentStatus, IncidentPriority
-from app.schemas.incident_schema import IncidentCreate, IncidentUpdate, IncidentResponse
+from app.schemas.incident_schema import (
+    IncidentCreate, IncidentUpdate, IncidentResponse,
+    IncidentCommentCreate, IncidentAuditLogResponse
+)
 from app.core.exceptions import NotFoundException, ValidationException
 from app.api.dependencies import get_incident_service, get_anomaly_service
 
@@ -18,7 +21,6 @@ async def create_incident(
     anomaly_service: AnomalyService = Depends(get_anomaly_service)
 ):
     """Create an incident from an anomaly"""
-    # Get anomaly
     anomalies = anomaly_service.get_recent_anomalies(hours=168)
     anomaly = None
     for a in anomalies:
@@ -63,7 +65,7 @@ async def get_incidents(
     offset: int = Query(0),
     service: IncidentService = Depends(get_incident_service)
 ):
-    """Get incidents with filters"""
+    """Get incidents with filters and pagination"""
     tickets = service.get_all_tickets(status, dma_id, priority, limit, offset)
     return [IncidentResponse(**t.dict()) for t in tickets]
 
@@ -115,11 +117,12 @@ async def update_incident_status(
     ticket_id: int,
     status: IncidentStatus,
     notes: Optional[str] = None,
+    user: str = "operator",
     service: IncidentService = Depends(get_incident_service)
 ):
-    """Update incident status"""
+    """Update incident status with ITIL validation"""
     try:
-        ticket = service.update_ticket_status(ticket_id, status, notes)
+        ticket = service.update_ticket_status(ticket_id, status, user, notes)
         return IncidentResponse(**ticket.dict())
     except (NotFoundException, ValidationException) as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
@@ -129,25 +132,84 @@ async def update_incident_status(
 async def assign_incident(
     ticket_id: int,
     assigned_to: str,
+    user: str = "operator",
     service: IncidentService = Depends(get_incident_service)
 ):
     """Assign an incident to someone"""
     try:
-        ticket = service.assign_ticket(ticket_id, assigned_to)
+        ticket = service.assign_ticket(ticket_id, assigned_to, user)
         return IncidentResponse(**ticket.dict())
     except NotFoundException as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.post("/{ticket_id}/comment")
+async def add_incident_comment(
+    ticket_id: int,
+    comment_data: IncidentCommentCreate,
+    service: IncidentService = Depends(get_incident_service)
+):
+    """Add comment to incident"""
+    try:
+        ticket = service.add_comment(ticket_id, comment_data.user, comment_data.comment, comment_data.is_internal)
+        return IncidentResponse(**ticket.dict())
+    except NotFoundException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.post("/{ticket_id}/escalate")
+async def escalate_incident(
+    ticket_id: int,
+    reason: str = "SLA breach imminent",
+    user: str = "system",
+    service: IncidentService = Depends(get_incident_service)
+):
+    """Escalate an incident"""
+    try:
+        ticket = service.escalate_ticket(ticket_id, user, reason)
+        return IncidentResponse(**ticket.dict())
+    except (NotFoundException, ValidationException) as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.post("/{ticket_id}/link-anomaly")
+async def link_anomaly_to_incident(
+    ticket_id: int,
+    anomaly_id: int,
+    service: IncidentService = Depends(get_incident_service)
+):
+    """Link an anomaly to an incident"""
+    try:
+        ticket = service.link_anomaly(ticket_id, anomaly_id)
+        return IncidentResponse(**ticket.dict())
+    except NotFoundException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.get("/{ticket_id}/audit-log")
+async def get_incident_audit_log(
+    ticket_id: int,
+    service: IncidentService = Depends(get_incident_service)
+):
+    """Get audit log for an incident"""
+    ticket = service.get_ticket(ticket_id)
+    if not ticket:
+        raise NotFoundException("Ticket", str(ticket_id))
+    
+    logs = service.get_ticket_audit_log(ticket_id)
+    return [IncidentAuditLogResponse(**log) for log in logs]
 
 
 @router.post("/{ticket_id}/resolve")
 async def resolve_incident(
     ticket_id: int,
     resolution_notes: Optional[str] = None,
+    user: str = "operator",
     service: IncidentService = Depends(get_incident_service)
 ):
     """Resolve an incident"""
     try:
-        ticket = service.update_ticket_status(ticket_id, IncidentStatus.RESOLVED, resolution_notes)
+        ticket = service.update_ticket_status(ticket_id, IncidentStatus.RESOLVED, user, resolution_notes)
         return IncidentResponse(**ticket.dict())
     except (NotFoundException, ValidationException) as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
@@ -156,14 +218,28 @@ async def resolve_incident(
 @router.post("/{ticket_id}/close")
 async def close_incident(
     ticket_id: int,
+    user: str = "operator",
     service: IncidentService = Depends(get_incident_service)
 ):
     """Close an incident"""
     try:
-        ticket = service.update_ticket_status(ticket_id, IncidentStatus.CLOSED)
+        ticket = service.update_ticket_status(ticket_id, IncidentStatus.CLOSED, user)
         return IncidentResponse(**ticket.dict())
     except (NotFoundException, ValidationException) as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+@router.post("/check-sla-breaches")
+async def check_sla_breaches(
+    service: IncidentService = Depends(get_incident_service)
+):
+    """Check and escalate SLA breaches (for cron job)"""
+    escalated = service.check_and_escalate_sla_breaches()
+    return {
+        "checked_at": datetime.utcnow().isoformat(),
+        "escalated_count": len(escalated),
+        "escalated": [IncidentResponse(**t.dict()) for t in escalated]
+    }
 
 
 @router.get("/sla/metrics")
@@ -182,7 +258,6 @@ async def get_moche_sla_metrics(
     metrics = service.get_sla_metrics()
     from app.core.config import settings
     
-    # Get tickets for Moche
     tickets = service.get_all_tickets(dma_id=settings.target_dma)
     moche_metrics = {
         **metrics,

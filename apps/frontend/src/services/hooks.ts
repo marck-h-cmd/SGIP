@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { api } from './api';
 
 export function useDmas() {
@@ -89,5 +90,98 @@ export function useCustomReport(startDate: string, endDate: string) {
     queryKey: ['report-custom', startDate, endDate],
     queryFn: () => api.reports.mocheCustom(startDate, endDate),
     enabled: !!startDate && !!endDate,
+  });
+}
+
+// WebSocket hook for real-time incident updates
+export function useIncidentWebSocket(onIncidentUpdate?: (data: any) => void) {
+  const [isConnected, setIsConnected] = useState(false);
+  const [lastMessage, setLastMessage] = useState<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const qc = useQueryClient();
+
+  const connect = useCallback(() => {
+    try {
+      const wsUrl = `ws://localhost:8000/ws/incidents`;
+      const ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        setIsConnected(true);
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setLastMessage(data);
+          
+          // Invalidate queries based on message type
+          if (data.type === 'incident_update' || data.type === 'incident_created') {
+            qc.invalidateQueries({ queryKey: ['incidents'] });
+            if (onIncidentUpdate) onIncidentUpdate(data);
+          }
+        } catch (e) {
+          console.error('Error parsing WebSocket message:', e);
+        }
+      };
+      
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setIsConnected(false);
+        // Reconnect after 5 seconds
+        reconnectTimeoutRef.current = setTimeout(connect, 5000);
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        ws.close();
+      };
+      
+      wsRef.current = ws;
+    } catch (error) {
+      console.error('WebSocket connection error:', error);
+    }
+  }, [qc, onIncidentUpdate]);
+
+  useEffect(() => {
+    connect();
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
+  }, [connect]);
+
+  const sendMessage = useCallback((message: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message));
+    }
+  }, []);
+
+  return { isConnected, lastMessage, sendMessage };
+}
+
+// SLA Metrics hooks
+export function useSlaMetrics(dmaId?: string) {
+  return useQuery({
+    queryKey: ['sla-metrics', dmaId],
+    queryFn: () => dmaId ? api.incidents.slaMetrics(dmaId) : api.incidents.slaMetrics(),
+    refetchInterval: 300000, // 5 minutes
+  });
+}
+
+export function useCheckSlaBreaches() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.incidents.checkSlaBreaches(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['incidents'] });
+      qc.invalidateQueries({ queryKey: ['sla-metrics'] });
+    },
   });
 }

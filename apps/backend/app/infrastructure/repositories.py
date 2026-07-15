@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
 from datetime import datetime, timedelta
-from app.infrastructure.models import DMAModel, SensorModel, TelemetryReadingModel, AnomalyModel, IncidentTicketModel
+from app.infrastructure.models import DMAModel, SensorModel, TelemetryReadingModel, AnomalyModel, IncidentTicketModel, AlertModel, IncidentAuditLogModel
 
 class DMARepository:
     def __init__(self, db: Session):
@@ -121,3 +121,60 @@ class IncidentRepository:
         self.db.commit()
         self.db.refresh(ticket)
         return ticket
+
+
+class AlertRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_by_id(self, id: int) -> Optional[AlertModel]:
+        return self.db.query(AlertModel).filter(AlertModel.id == id).first()
+
+    def get_active(self, dma_id: Optional[str] = None) -> List[AlertModel]:
+        query = self.db.query(AlertModel).filter(AlertModel.status == "ACTIVE")
+        if dma_id:
+            query = query.filter(AlertModel.dma_id == dma_id)
+        return query.order_by(desc(AlertModel.created_at)).all()
+
+    def get_by_anomaly(self, anomaly_id: int) -> Optional[AlertModel]:
+        return self.db.query(AlertModel).filter(AlertModel.anomaly_id == anomaly_id).first()
+
+    def get_by_incident(self, incident_id: int) -> Optional[AlertModel]:
+        return self.db.query(AlertModel).filter(AlertModel.incident_id == incident_id).first()
+
+    def get_history(self, hours: int = 24, dma_id: Optional[str] = None) -> List[AlertModel]:
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        query = self.db.query(AlertModel).filter(AlertModel.created_at >= cutoff)
+        if dma_id:
+            query = query.filter(AlertModel.dma_id == dma_id)
+        return query.order_by(desc(AlertModel.created_at)).all()
+
+    def get_all(self) -> List[AlertModel]:
+        return self.db.query(AlertModel).order_by(desc(AlertModel.created_at)).all()
+
+    def create(self, alert: AlertModel) -> AlertModel:
+        self.db.add(alert)
+        self.db.commit()
+        self.db.refresh(alert)
+        return alert
+
+    def update(self, alert: AlertModel) -> AlertModel:
+        self.db.commit()
+        self.db.refresh(alert)
+        return alert
+
+
+class IncidentAuditLogRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create(self, log: IncidentAuditLogModel) -> IncidentAuditLogModel:
+        self.db.add(log)
+        self.db.commit()
+        self.db.refresh(log)
+        return log
+
+    def get_by_ticket(self, ticket_id: int) -> List[IncidentAuditLogModel]:
+        return self.db.query(IncidentAuditLogModel).filter(
+            IncidentAuditLogModel.ticket_id == ticket_id
+        ).order_by(IncidentAuditLogModel.created_at).all()

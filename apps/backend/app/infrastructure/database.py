@@ -16,7 +16,15 @@ class Database:
         if self.database_url.startswith("sqlite"):
             connect_args = {"check_same_thread": False}
             
-        self.engine = create_engine(self.database_url, connect_args=connect_args)
+        self.engine = create_engine(
+            self.database_url,
+            connect_args=connect_args,
+            pool_size=20,
+            max_overflow=30,
+            pool_timeout=60,
+            pool_recycle=1800,
+            pool_pre_ping=True
+        )
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
     def create_tables(self):

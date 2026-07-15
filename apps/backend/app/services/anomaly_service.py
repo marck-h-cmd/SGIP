@@ -2,6 +2,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
+import random
 
 from app.core.config import settings
 from app.infrastructure.database import db
@@ -16,7 +17,7 @@ from app.services.alert_service import AlertService
 class AnomalyService:
     """Service to handle anomaly detection logic"""
 
-    def __init__(self, db_session=None, telemetry_service=None):
+    def __init__(self, db_session=None, telemetry_service=None, incident_service=None):
         from fastapi.params import Depends as DependsClass
         if isinstance(db_session, DependsClass) or db_session is None:
             self.db = db.SessionLocal()
@@ -32,6 +33,13 @@ class AnomalyService:
             self.telemetry_service = telemetry_service
             
         self.alert_service = AlertService()
+        
+        if isinstance(incident_service, DependsClass) or incident_service is None:
+            from app.services.incident_service import IncidentService
+            self.incident_service = IncidentService()
+        else:
+            self.incident_service = incident_service
+        
         self.ml_model = IsolationForestModel()
         
         self._initialize_model()
@@ -39,8 +47,6 @@ class AnomalyService:
     def _initialize_model(self):
         """Prepare ML model by training it if needed"""
         try:
-            # Generate dummy telemetry to train if database is empty
-            # In a real app, we would query historical data
             readings = []
             now = datetime.utcnow()
             for i in range(120):
@@ -68,23 +74,19 @@ class AnomalyService:
             try:
                 is_anomaly, score, analysis = self.ml_model.predict(reading)
             except Exception as e:
-                # Heuristic fallback if model prediction fails
                 is_anomaly = reading.pressure_mca < 40.0 or reading.flow_lps > 35.0
                 score = 0.8 if is_anomaly else 0.2
         else:
             is_anomaly = reading.pressure_mca < 40.0 or reading.flow_lps > 35.0
             score = 0.8 if is_anomaly else 0.2
 
-        # Override ML model for extreme threshold breaches
-        # (Isolation Forest may fail to score points far outside its training bounding box)
         if reading.pressure_mca < 40.0 or reading.flow_lps > 35.0:
             is_anomaly = True
             if score < 0.8:
-                score = 1.0  # Force a high score for extreme breaches
+                score = 1.0
 
         anomaly_domain = None
         if is_anomaly:
-            # Severity based on physical thresholds (ordered from most to least severe)
             if reading.pressure_mca < 30.0 or reading.flow_lps > 45.0:
                 severity = AnomalySeverity.CRITICAL
             elif reading.pressure_mca < 35.0 or reading.flow_lps > 40.0:
@@ -94,16 +96,12 @@ class AnomalyService:
             else:
                 severity = AnomalySeverity.LOW
 
-            # Calculate variations vs. normal baseline
             pressure_var = reading.pressure_mca - 55.2
             flow_var = reading.flow_lps - 25.4
-            
-            # Loss estimation: excess flow * 3600 sec (liters per hour) / 1000 → m³
             loss_estimate = max(0.0, flow_var) * 3.6 if flow_var > 0 else 0.0
 
-            # Save model to database
             anomaly_model = AnomalyModel(
-                telemetry_id=1,  # mock or real reference
+                telemetry_id=1,
                 dma_id=reading.dma_id,
                 dma_name=reading.dma_name,
                 anomaly_score=score,
@@ -131,8 +129,13 @@ class AnomalyService:
                 description=saved.description
             )
             
-            # Trigger alert
             self.alert_service.create_alert_from_anomaly(anomaly_domain)
+            
+            if severity in [AnomalySeverity.CRITICAL, AnomalySeverity.HIGH]:
+                try:
+                    self.incident_service.create_incident(anomaly_domain)
+                except Exception:
+                    pass
 
         return {
             "is_anomaly": is_anomaly,
@@ -145,7 +148,6 @@ class AnomalyService:
         """Analyze a whole DMA history for anomalies"""
         end = datetime.utcnow()
         start = end - timedelta(hours=hours)
-        # Usar el servicio de telemetría (que usa el proveedor mock con caché)
         readings = self.telemetry_service.get_historical_readings(dma_id, start, end)
         
         anomalies_found = []
@@ -202,32 +204,102 @@ class AnomalyService:
         return results
 
     def _generate_mock_anomalies(self, dma_id: str, hours: int) -> list:
+        """
+        Generar anomalías simuladas pero realistas usando escenarios del catálogo hidráulico.
+        Cada anomalía tiene: tipo, descripción coherente, causa raíz, severidad, y efectos físicos.
+        """
         from app.providers.mock_provider import MockTelemetryProvider
+        from app.providers.anomaly_scenarios import get_random_scenario, select_severity, compute_effects
+        
         dma_repo = DMARepository(self.db)
         if not dma_repo.get_by_code(dma_id):
-            dma_repo.create(DMAModel(code=dma_id, name=dma_id, district="Moche", status="ACTIVE", population=18000))
-        provider = MockTelemetryProvider()
-        end = datetime.utcnow()
-        start = end - timedelta(hours=hours)
-        readings = provider.get_historical_readings(dma_id, start, end, limit=96)
+            dma_repo.create(DMAModel(
+                code=dma_id, name="Moche 01", district="Moche",
+                status="ACTIVE", population=18000,
+                description="Sector Moche - Zona urbana principal"
+            ))
+
+        now = datetime.utcnow()
+        start = now - timedelta(hours=hours)
+        
+        # Generar entre 3 y 12 anomalías realistas según el período
+        num_anomalies = min(max(3, hours // 6), 12)
+        
         saved = []
-        for r in readings:
-            is_anomaly = r.pressure_mca < 40.0 or r.flow_lps > 35.0
-            if not is_anomaly:
-                continue
-            severity = "CRITICAL" if r.pressure_mca < 30.0 or r.flow_lps > 45.0 else \
-                       "HIGH" if r.pressure_mca < 35.0 or r.flow_lps > 40.0 else \
-                       "MEDIUM" if r.pressure_mca < 45.0 else "LOW"
-            pressure_var = r.pressure_mca - 55.2
-            flow_var = r.flow_lps - 25.4
-            model = AnomalyModel(
-                telemetry_id=1, dma_id=r.dma_id, dma_name=r.dma_name,
-                anomaly_score=0.85, severity=severity, status="PENDING",
-                pressure_variation=pressure_var, flow_variation=flow_var,
-                estimated_loss_volume=max(0.0, flow_var) * 3.6,
-                description=f"Variación hidráulica: Presión ({pressure_var:.1f} MCA), Caudal ({flow_var:.1f} LPS)"
+        used_scenarios = set()
+        
+        for i in range(num_anomalies):
+            # Seleccionar escenario (evitar repetir si es posible)
+            scenario = get_random_scenario()
+            attempts = 0
+            while scenario.code in used_scenarios and attempts < 5:
+                scenario = get_random_scenario()
+                attempts += 1
+            used_scenarios.add(scenario.code)
+            
+            # Seleccionar severidad
+            severity = select_severity(scenario)
+            
+            # Calcular efectos físicos
+            pressure_delta, flow_delta = compute_effects(scenario, severity)
+            
+            # Timestamp realista: distribuido a lo largo del período
+            offset_hours = random.uniform(0.5, hours - 0.5)
+            detected_at = now - timedelta(hours=offset_hours)
+            
+            # Baseline realista (55.2 MCA, 25.4 LPS)
+            base_pressure = 55.2
+            base_flow = 25.4
+            final_pressure = base_pressure + pressure_delta
+            final_flow = base_flow + flow_delta
+            
+            # Score de anomalía coherente con severidad
+            score_map = {"CRITICAL": 0.92, "HIGH": 0.82, "MEDIUM": 0.68, "LOW": 0.45}
+            base_score = score_map.get(severity, 0.6)
+            anomaly_score = round(base_score + random.uniform(-0.05, 0.05), 3)
+            
+            # Pérdida estimada: solo si hay exceso de caudal
+            estimated_loss = max(0.0, flow_delta * 3.6) if flow_delta > 0 else 0.0
+            
+            # Descripción completa con contexto
+            description = (
+                f"[{scenario.code}] {scenario.name}\n"
+                f"Efecto: Presión {pressure_delta:+.1f} MCA (final: {final_pressure:.1f}), "
+                f"Caudal {flow_delta:+.1f} LPS (final: {final_flow:.1f})\n"
+                f"Causa probable: {scenario.root_cause}\n"
+                f"Pérdida estimada: {estimated_loss:.1f} m³/h"
             )
+            
+            # Estado: la mayoría son PENDING, algunas CONFIRMED, muy pocas RESOLVED
+            status_weights = {"PENDING": 0.5, "CONFIRMED": 0.3, "RESOLVED": 0.15, "REJECTED": 0.05}
+            status = random.choices(
+                list(status_weights.keys()),
+                weights=list(status_weights.values()),
+                k=1
+            )[0]
+            
+            model = AnomalyModel(
+                telemetry_id=random.randint(1, 100),
+                dma_id=dma_id,
+                dma_name="Moche 01",
+                anomaly_score=anomaly_score,
+                severity=severity,
+                status=status,
+                detected_at=detected_at,
+                pressure_variation=pressure_delta,
+                flow_variation=flow_delta,
+                estimated_loss_volume=round(estimated_loss, 2),
+                description=description
+            )
+            
+            # Ajustar fechas de confirmación/resolución según estado
+            if status in ("CONFIRMED", "RESOLVED"):
+                model.confirmed_at = detected_at + timedelta(hours=random.uniform(0.5, 4))
+            if status == "RESOLVED":
+                model.resolved_at = model.confirmed_at + timedelta(hours=random.uniform(2, 12)) if model.confirmed_at else detected_at + timedelta(hours=random.uniform(4, 24))
+            
             saved.append(self.anomaly_repo.create(model))
+        
         return saved
 
     def _calculate_severity_distribution(self, anomalies: List[Dict[str, Any]]) -> Dict[str, int]:

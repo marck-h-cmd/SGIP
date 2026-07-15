@@ -1,0 +1,153 @@
+{% extends "base_report.html" %}
+
+{% block title %}Reporte Personalizado - {{ report.period_start.strftime("%d/%m/%Y") }} - {{ report.period_end.strftime("%d/%m/%Y") }}{% endblock %}
+
+{% block report_title %}Reporte Personalizado{% endblock %}
+
+{% block report_subtitle %}
+DMA: {{ report.dma_id }} - {{ report.dma_name }} | 
+Periodo: {{ report.period_start.strftime("%d/%m/%Y") }} - {{ report.period_end.strftime("%d/%m/%Y") }}
+{% endblock %}
+
+{% block content %}
+<!-- KPI Cards -->
+<div class="section">
+    <div class="section-title">Resumen del Periodo</div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.total_readings }}</div>
+            <div class="metric-label">Lecturas Totales</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.avg_pressure }} mca</div>
+            <div class="metric-label">Presion Promedio</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.avg_flow }} LPS</div>
+            <div class="metric-label">Caudal Promedio</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.anomalies_detected }}</div>
+            <div class="metric-label">Anomalias Detectadas</div>
+        </div>
+    </div>
+</div>
+
+<!-- Water Loss and Incidents -->
+<div class="section">
+    <div class="section-title">Indicadores de Perdidas y Atencion</div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+        <div class="metric-card{% if summary.nrw_percentage > 25 %} warning{% endif %}">
+            <div class="metric-value">{{ summary.nrw_percentage }}%</div>
+            <div class="metric-label">Perdidas No Renumeradas (NRW)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.water_loss_m3 }} m³</div>
+            <div class="metric-label">Perdidas de Agua (m³/dia prom)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.incidents_created }}</div>
+            <div class="metric-label">Incidencias Creadas</div>
+        </div>
+    </div>
+</div>
+
+<!-- Anomalies List -->
+{% if details.anomalies_list %}
+<div class="section">
+    <div class="section-title">Anomalias Detectadas ({{ details.anomalies_list|length }})</div>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Severidad</th>
+            <th>Estado</th>
+            <th>Tipo</th>
+        </tr>
+        {% for anomaly in details.anomalies_list[:30] %}
+        <tr>
+            <td>{{ anomaly.id }}</td>
+            <td>{{ anomaly.date }}</td>
+            <td>{{ anomaly.severity }}</td>
+            <td>{{ anomaly.status }}</td>
+            <td>{{ anomaly.type }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% if details.anomalies_list|length > 30 %}
+    <p style="font-size: 11px; color: #666;">Mostrando 30 de {{ details.anomalies_list|length }} anomalias</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Incidents List -->
+{% if details.incidents_list %}
+<div class="section">
+    <div class="section-title">Incidencias del Periodo ({{ details.incidents_list|length }})</div>
+    <table>
+        <tr>
+            <th>Codigo</th>
+            <th>Titulo</th>
+            <th>Prioridad</th>
+            <th>Estado</th>
+            <th>Fecha</th>
+        </tr>
+        {% for incident in details.incidents_list[:50] %}
+        <tr>
+            <td>{{ incident.code }}</td>
+            <td>{{ incident.title }}</td>
+            <td>{{ incident.priority }}</td>
+            <td>{{ incident.status }}</td>
+            <td>{{ incident.date }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% if details.incidents_list|length > 50 %}
+    <p style="font-size: 11px; color: #666;">Mostrando 50 de {{ details.incidents_list|length }} incidencias</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Summary Table -->
+<div class="section">
+    <div class="section-title">Tabla Resumen</div>
+    <table>
+        <tr>
+            <th>Metrica</th>
+            <th>Valor</th>
+        </tr>
+        <tr>
+            <td>Lecturas Totales</td>
+            <td>{{ summary.total_readings }}</td>
+        </tr>
+        <tr>
+            <td>Promedio Presion (mca)</td>
+            <td>{{ summary.avg_pressure }}</td>
+        </tr>
+        <tr>
+            <td>Promedio Caudal (LPS)</td>
+            <td>{{ summary.avg_flow }}</td>
+        </tr>
+        <tr>
+            <td>Anomalias Detectadas</td>
+            <td>{{ summary.anomalies_detected }}</td>
+        </tr>
+        <tr>
+            <td>Incidencias Creadas</td>
+            <td>{{ summary.incidents_created }}</td>
+        </tr>
+        <tr>
+            <td>Incidencias Resueltas</td>
+            <td>{{ summary.incidents_resolved }}</td>
+        </tr>
+        <tr>
+            <td>NRW (%)</td>
+            <td>{{ summary.nrw_percentage }}</td>
+        </tr>
+        <tr>
+            <td>Perdidas (m³/dia prom)</td>
+            <td>{{ summary.water_loss_m3 }}</td>
+        </tr>
+    </table>
+</div>
+{% endblock %}

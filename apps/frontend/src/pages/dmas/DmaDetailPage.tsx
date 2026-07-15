@@ -66,7 +66,7 @@ export default function DmaDetailPage() {
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="time" fontSize={11} tickLine={false} interval={12} />
+                <XAxis dataKey="time" fontSize={11} tickLine={false} minTickGap={60} />
                 <YAxis fontSize={11} tickLine={false} />
                 <Tooltip />
                 <Line type="monotone" dataKey="presion" stroke="#0d6ebd" strokeWidth={2} dot={false} name="Presión (MCA)" />
@@ -80,7 +80,7 @@ export default function DmaDetailPage() {
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="time" fontSize={11} tickLine={false} interval={12} />
+                <XAxis dataKey="time" fontSize={11} tickLine={false} minTickGap={60} />
                 <YAxis fontSize={11} tickLine={false} />
                 <Tooltip />
                 <Line type="monotone" dataKey="caudal" stroke="#0ea5e9" strokeWidth={2} dot={false} name="Caudal (LPS)" />

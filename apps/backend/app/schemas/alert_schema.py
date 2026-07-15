@@ -13,6 +13,7 @@ class AlertResponse(BaseModel):
     dma_id: str
     dma_name: str
     anomaly_id: Optional[int] = None
+    incident_id: Optional[int] = None
     timestamp: str
     status: str
     acknowledged: bool

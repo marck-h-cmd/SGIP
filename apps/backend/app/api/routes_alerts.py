@@ -16,7 +16,7 @@ async def get_alerts(
     if active_only:
         alerts = service.get_active_alerts()
     else:
-        alerts = service.alerts
+        alerts = service.get_all_alerts()
     
     return [AlertResponse(**a) for a in alerts]
 

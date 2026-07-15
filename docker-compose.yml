@@ -12,6 +12,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - sgip-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sgip_user -d sgip_cap"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -20,6 +26,12 @@ services:
       - "6379:6379"
     networks:
       - sgip-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   backend:
     build:
@@ -34,8 +46,10 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./apps/backend:/app
       - ./data:/data
@@ -65,6 +79,46 @@ services:
       - sgip-network
     environment:
       VITE_API_URL: http://backend:8000
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sgip-cap-celery-worker
+    environment:
+      DATABASE_URL: postgresql://sgip_user:sgip_pass@postgres:5432/sgip_cap
+      REDIS_URL: redis://redis:6379
+      DATA_PROVIDER: mock
+      TARGET_DMA: DMA-MO-01
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    volumes:
+      - ./apps/backend:/app
+    networks:
+      - sgip-network
+    command: celery -A app.celery_config:celery_app worker --loglevel=info --concurrency=4
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sgip-cap-celery-beat
+    environment:
+      DATABASE_URL: postgresql://sgip_user:sgip_pass@postgres:5432/sgip_cap
+      REDIS_URL: redis://redis:6379
+      DATA_PROVIDER: mock
+      TARGET_DMA: DMA-MO-01
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    volumes:
+      - ./apps/backend:/app
+    networks:
+      - sgip-network
+    command: celery -A app.celery_config:celery_app beat --loglevel=info
 
 volumes:
   postgres_data:

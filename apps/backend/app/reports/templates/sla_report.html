@@ -1,0 +1,156 @@
+{% extends "base_report.html" %}
+
+{% block title %}Reporte SLA - {{ report.period_start.strftime("%d/%m/%Y") }} - {{ report.period_end.strftime("%d/%m/%Y") }}{% endblock %}
+
+{% block report_title %}Reporte de Cumplimiento SLA{% endblock %}
+
+{% block report_subtitle %}
+DMA: {{ report.dma_id }} - {{ report.dma_name }} | 
+Periodo: {{ report.period_start.strftime("%d/%m/%Y") }} - {{ report.period_end.strftime("%d/%m/%Y") }}
+{% endblock %}
+
+{% block content %}
+<!-- KPI Cards -->
+<div class="section">
+    <div class="section-title">Resumen de Cumplimiento SLA</div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.total_incidents }}</div>
+            <div class="metric-label">Total Incidencias</div>
+        </div>
+        <div class="metric-card{% if summary.breach_rate > 10 %} warning{% endif %}">
+            <div class="metric-value">{{ summary.breach_rate }}%</div>
+            <div class="metric-label">Tasa de Incumplimiento</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.avg_response_hours }} hrs</div>
+            <div class="metric-label">Tiempo Promedio Respuesta</div>
+        </div>
+        <div class="metric-card success">
+            <div class="metric-value">{{ summary.resolved_count }}</div>
+            <div class="metric-label">Incidencias Resueltas</div>
+        </div>
+    </div>
+</div>
+
+<!-- Breach Status -->
+<div class="section">
+    <div class="section-title">Estado de Incumplimientos</div>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+        <div class="metric-card{% if summary.breached_incidents > 0 %} warning{% endif %}">
+            <div class="metric-value">{{ summary.breached_incidents }}</div>
+            <div class="metric-label">Incidencias con SLA Vencido</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.in_progress_count }}</div>
+            <div class="metric-label">En Progreso (sin vencimiento)</div>
+        </div>
+    </div>
+</div>
+
+<!-- Response Time Stats -->
+<div class="section">
+    <div class="section-title">Estadisticas de Tiempo de Respuesta</div>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.avg_resolution_time_hours }} hrs</div>
+            <div class="metric-label">Tiempo Promedio Resolucion</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ details.top_response_times|length }}</div>
+            <div class="metric-label">Tiempos Registrados</div>
+        </div>
+    </div>
+</div>
+
+<!-- Breached Incidents Table -->
+{% if details.breached_incidents %}
+<div class="section">
+    <div class="section-title">Incidencias con SLA Vencido ({{ details.breached_incidents|length }})</div>
+    <table>
+        <tr>
+            <th>Codigo</th>
+            <th>Titulo</th>
+            <th>Prioridad</th>
+            <th>Fecha Creacion</th>
+            <th>SLA Due</th>
+        </tr>
+        {% for incident in details.breached_incidents[:20] %}
+        <tr>
+            <td>{{ incident.code }}</td>
+            <td>{{ incident.title }}</td>
+            <td>{{ incident.priority }}</td>
+            <td>{{ incident.created_at }}</td>
+            <td>{{ incident.sla_due_date }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+<!-- Priority Breakdown -->
+{% if details.by_priority %}
+<div class="section">
+    <div class="section-title">Desglose por Prioridad</div>
+    <table>
+        <tr>
+            <th>Prioridad</th>
+            <th>Total</th>
+            <th>Incumplidos</th>
+            <th>Tasa Incumplimiento</th>
+        </tr>
+        {% for priority, data in details.by_priority.items() %}
+        <tr>
+            <td>{{ priority }}</td>
+            <td>{{ data.total }}</td>
+            <td>{{ data.breached }}</td>
+            <td>{{ data.breach_rate }}%</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+<!-- Status Breakdown -->
+{% if details.by_status %}
+<div class="section">
+    <div class="section-title">Desglose por Estado</div>
+    <table>
+        <tr>
+            <th>Estado</th>
+            <th>Cantidad</th>
+            <th>Porcentaje</th>
+        </tr>
+        {% for status, count in details.by_status.items() %}
+        <tr>
+            <td>{{ status }}</td>
+            <td>{{ count }}</td>
+            <td>{{ (count / summary.total_incidents * 100)|round(1) }}%</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+<!-- Recommendations -->
+<div class="section">
+    <div class="section-title">Recomendaciones SLA</div>
+    <div class="info">
+        {% if summary.breach_rate > 10 %}
+        <p><strong>ALTA TASA DE INCUMPLIMIENTO:</strong> El {{ summary.breach_rate }}% de las incidencias incumplen el SLA. Se requiere mejorar los tiempos de respuesta.</p>
+        {% endif %}
+        
+        {% if summary.avg_resolution_time_hours > 24 %}
+        <p><strong>TIEMPO PROMEDIO ALTO:</strong> El tiempo promedio de resolucion es de {{ summary.avg_resolution_time_hours }} horas. Considerar automatizar procesos.</p>
+        {% endif %}
+        
+        {% if summary.breached_incidents > 5 %}
+        <p><strong>INCIDENCIAS VENCIDAS:</strong> Hay {{ summary.breached_incidents }} incidencias con SLA vencido. Priorizar su resolucion.</p>
+        {% endif %}
+        
+        {% if summary.breach_rate <= 5 %}
+        <p><strong>BUEN CUMPLIMIENTO:</strong> La tasa de incumplimiento es aceptable ({{ summary.breach_rate }}%). Mantener el desempeño.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

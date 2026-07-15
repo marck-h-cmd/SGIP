@@ -21,6 +21,7 @@ class IncidentStatus(str, Enum):
     REJECTED = "REJECTED"
     CANCELLED = "CANCELLED"
     REOPENED = "REOPENED"
+    ESCALATED = "ESCALATED"
 
 
 class IncidentTicket(BaseModel):

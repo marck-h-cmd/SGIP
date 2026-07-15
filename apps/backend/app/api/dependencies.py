@@ -10,7 +10,8 @@ def get_telemetry_service():
 
 
 def get_anomaly_service():
-    return AnomalyService()
+    incident_service = get_incident_service()
+    return AnomalyService(incident_service=incident_service)
 
 
 def get_incident_service():

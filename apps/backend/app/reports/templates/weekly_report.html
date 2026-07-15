@@ -1,0 +1,122 @@
+{% extends "base_report.html" %}
+
+{% block title %}Reporte Semanal - {{ report.period_start.strftime("%d/%m/%Y") }} - {{ report.period_end.strftime("%d/%m/%Y") }}{% endblock %}
+
+{% block report_title %}Reporte Semanal Operacional{% endblock %}
+
+{% block report_subtitle %}
+DMA: {{ report.dma_id }} - {{ report.dma_name }} | 
+Periodo: {{ report.period_start.strftime("%d/%m/%Y") }} - {{ report.period_end.strftime("%d/%m/%Y") }}
+{% endblock %}
+
+{% block content %}
+<!-- KPI Cards -->
+<div class="section">
+    <div class="section-title">Resumen de la Semana</div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.total_readings }}</div>
+            <div class="metric-label">Lecturas Totales</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.total_anomalies }}</div>
+            <div class="metric-label">Anomalias Detectadas</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.total_incidents }}</div>
+            <div class="metric-label">Incidencias Creadas</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ summary.water_loss_estimate }} m³</div>
+            <div class="metric-label">Perdidas Totales (m³)</div>
+        </div>
+    </div>
+</div>
+
+<!-- NRW and Trends -->
+<div class="section">
+    <div class="section-title">Indicadores Clave y Tendencias</div>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+        <div class="metric-card{% if summary.nrw_percentage > 25 %} warning{% endif %}">
+            <div class="metric-value">{{ summary.nrw_percentage }}%</div>
+            <div class="metric-label">Perdidas No Renumeradas (NRW)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ details.period_days }}</div>
+            <div class="metric-label">Dias en Periodo</div>
+        </div>
+    </div>
+</div>
+
+<!-- Daily Statistics Table -->
+{% if details.daily_stats %}
+<div class="section">
+    <div class="section-title">Estadisticas Diarias</div>
+    <table>
+        <tr>
+            <th>Fecha</th>
+            <th>Presion Prom (mca)</th>
+            <th>Caudal Prom (LPS)</th>
+            <th>Lecturas</th>
+            <th>Anomalias</th>
+            <th>Perdidas (m³)</th>
+        </tr>
+        {% for stat in details.daily_stats %}
+        <tr>
+            <td>{{ stat.date }}</td>
+            <td>{{ stat.avg_pressure }}</td>
+            <td>{{ stat.avg_flow }}</td>
+            <td>{{ stat.readings_count }}</td>
+            <td>{{ stat.anomalies_count }}</td>
+            <td>{{ stat.water_loss }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+<!-- Trends -->
+<div class="section">
+    <div class="section-title">Analisis de Tendencias</div>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+        <div class="metric-card">
+            <div class="metric-value">{{ details.anomaly_trend.trend }}</div>
+            <div class="metric-label">Tendencia de Anomalias</div>
+            <div style="font-size: 11px; margin-top: 5px;">
+                Cambio: {{ details.anomaly_trend.change_percentage }}%
+            </div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ details.incident_trend.trend }}</div>
+            <div class="metric-label">Tendencia de Incidencias</div>
+            <div style="font-size: 11px; margin-top: 5px;">
+                Cambio: {{ details.incident_trend.change_percentage }}%
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations -->
+<div class="section">
+    <div class="section-title">Recomendaciones de la Semana</div>
+    <div class="info">
+        {% if summary.nrw_percentage > 25 %}
+        <p><strong>ALTO NRW:</strong> Las perdidas no renumeradas estan por encima del 25%. Se requiere investigacion profunda.</p>
+        {% endif %}
+        
+        {% if details.anomaly_trend.trend == "RISING" %}
+        <p><strong>TENDENCIA CRECIENTE:</strong> Las anomalias estan aumentando. Se recomienda revisar la infraestructura.</p>
+        {% elif details.anomaly_trend.trend == "FALLING" %}
+        <p><strong>TENDENCIA DECRECIENTE:</strong> Las anomalias estan disminuyendo. Las acciones correctivas estan funcionando.</p>
+        {% endif %}
+        
+        {% if details.incident_trend.trend == "RISING" %}
+        <p><strong>INCREMENTO DE INCIDENCIAS:</strong> Hay mas incidencias que la semana anterior. Evaluar capacidad de respuesta.</p>
+        {% endif %}
+        
+        {% if summary.water_loss_estimate > 500 %}
+        <p><strong>ALTAS PERDIDAS:</strong> Se estimaron {{ summary.water_loss_estimate }} m³ de perdidas. Priorizar reparaciones.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

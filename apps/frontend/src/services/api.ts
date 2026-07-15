@@ -69,6 +69,21 @@ export const api = {
     get: (id: number) => fetchJson<IncidentTicket>(`/incidents/${id}`),
     updateStatus: (id: number, status: string) =>
       fetchJson<IncidentTicket>(`/incidents/${id}/status?status=${status}`, { method: 'PATCH' }),
+    slaMetrics: (dmaId?: string) => {
+      const endpoint = dmaId ? `/incidents/moche/sla-metrics` : `/incidents/sla/metrics`;
+      return fetchJson<Record<string, unknown>>(endpoint);
+    },
+    checkSlaBreaches: () =>
+      fetchJson<Record<string, unknown>>('/incidents/check-sla-breaches', { method: 'POST' }),
+    addComment: (id: number, comment: string, user: string = 'operator') =>
+      fetchJson<IncidentTicket>(`/incidents/${id}/comment`, {
+        method: 'POST',
+        body: JSON.stringify({ comment, user, is_internal: false })
+      }),
+    escalate: (id: number, reason: string = 'Manual escalation') =>
+      fetchJson<IncidentTicket>(`/incidents/${id}/escalate?reason=${encodeURIComponent(reason)}`, { method: 'POST' }),
+    getAuditLog: (id: number) =>
+      fetchJson<Record<string, unknown>[]>(`/incidents/${id}/audit-log`),
   },
   kpis: {
     executive: () => fetchJson<KpiExecutive>('/kpis/executive'),
@@ -92,6 +107,33 @@ export const api = {
       if (type === 'daily' && date) query += `&date=${date}`;
       if (type === 'custom' && start && end) query += `&start_date=${start}T00:00:00&end_date=${end}T23:59:59`;
       return fetchJson<{ content: string; filename: string; format: string }>(`/reports/export/${type}${query}`);
+    },
+    // New V2 modular endpoints
+    getReportV2: (reportType: string, params?: Record<string, string>) => {
+      const queryParams = new URLSearchParams(params).toString();
+      return fetchJson<Record<string, unknown>>(`/reports/v2/${reportType}${queryParams ? `?${queryParams}` : ''}`);
+    },
+    exportReportV2: (reportType: string, format: 'xlsx' | 'pdf' | 'csv', date?: string, startDate?: string, endDate?: string) => {
+      const params: Record<string, string> = { format };
+      if (date) params.date = date;
+      if (startDate && endDate) {
+        params.start_date = `${startDate}T00:00:00`;
+        params.end_date = `${endDate}T23:59:59`;
+      }
+      const queryParams = new URLSearchParams(params).toString();
+      // Return blob for file download
+      return fetch(`${API_BASE}/reports/v2/export/${reportType}?${queryParams}`, {
+        headers: getHeaders(),
+      }).then(res => {
+        if (!res.ok) {
+          return res.json().catch(() => ({ error: res.statusText })).then(err => { throw new Error(err.detail || err.error || `HTTP ${res.status}`); });
+        }
+        return res.blob();
+      });
+    },
+    getMocheReportV2: (reportType: string, params?: Record<string, string>) => {
+      const queryParams = new URLSearchParams(params).toString();
+      return fetchJson<Record<string, unknown>>(`/reports/v2/moche/${reportType}${queryParams ? `?${queryParams}` : ''}`);
     },
   },
 };

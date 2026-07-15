@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean, Text
 from sqlalchemy.orm import relationship
 from app.infrastructure.database import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 class DMAModel(Base):
     __tablename__ = "dmas"
@@ -39,7 +39,7 @@ class TelemetryReadingModel(Base):
     __tablename__ = "telemetry_readings"
 
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, index=True, default=datetime.utcnow)
+    timestamp = Column(DateTime(timezone=True), index=True, default=lambda: datetime.now(timezone.utc))
     dma_id = Column(String(50), ForeignKey("dmas.code"), nullable=False)
     sensor_id = Column(String(50), nullable=False)
     pressure_mca = Column(Float, nullable=False)
@@ -58,9 +58,9 @@ class AnomalyModel(Base):
     anomaly_score = Column(Float, nullable=False)
     severity = Column(String(50), nullable=False)  # LOW, MEDIUM, HIGH, CRITICAL
     status = Column(String(50), default="PENDING")  # PENDING, CONFIRMED, REJECTED, RESOLVED
-    detected_at = Column(DateTime, default=datetime.utcnow)
-    confirmed_at = Column(DateTime, nullable=True)
-    resolved_at = Column(DateTime, nullable=True)
+    detected_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
     pressure_variation = Column(Float, nullable=True)
     flow_variation = Column(Float, nullable=True)
     estimated_loss_volume = Column(Float, nullable=True)
@@ -80,10 +80,52 @@ class IncidentTicketModel(Base):
     priority = Column(String(50), nullable=False)  # LOW, MEDIUM, HIGH, CRITICAL
     status = Column(String(50), default="NEW")  # NEW, CLASSIFIED, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED, etc.
     assigned_to = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    sla_due_at = Column(DateTime, nullable=False)
-    resolved_at = Column(DateTime, nullable=True)
-    closed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    sla_due_at = Column(DateTime(timezone=True), nullable=False)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
     response_time_minutes = Column(Integer, nullable=True)
     resolution_time_minutes = Column(Integer, nullable=True)
+
+
+class AlertModel(Base):
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String(50), nullable=False)  # ANOMALY, SLA_BREACH, MANUAL
+    severity = Column(String(20), nullable=False)  # CRITICAL, HIGH, MEDIUM, LOW
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=True)
+    dma_id = Column(String(50), ForeignKey("dmas.code"), nullable=False)
+    dma_name = Column(String(100), nullable=False)
+    anomaly_id = Column(Integer, ForeignKey("anomalies.id"), nullable=True)
+    incident_id = Column(Integer, ForeignKey("incident_tickets.id"), nullable=True)
+    status = Column(String(20), default="ACTIVE")  # ACTIVE, ACKNOWLEDGED, RESOLVED
+    acknowledged = Column(Boolean, default=False)
+    acknowledged_by = Column(String(100), nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+    resolved = Column(Boolean, default=False)
+    resolved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    anomaly = relationship("AnomalyModel")
+    incident = relationship("IncidentTicketModel")
+
+
+class IncidentAuditLogModel(Base):
+    __tablename__ = "incident_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("incident_tickets.id"), nullable=False)
+    user = Column(String(100), nullable=False)
+    action = Column(String(50), nullable=False)  # STATUS_CHANGE, ASSIGNMENT, COMMENT, ESCALATION, RESOLUTION
+    from_status = Column(String(50), nullable=True)
+    to_status = Column(String(50), nullable=True)
+    from_value = Column(Text, nullable=True)
+    to_value = Column(Text, nullable=True)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    ticket = relationship("IncidentTicketModel")

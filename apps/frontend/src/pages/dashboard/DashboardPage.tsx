@@ -65,7 +65,7 @@ export default function DashboardPage() {
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="time" fontSize={12} tickLine={false} interval={12} />
+              <XAxis dataKey="time" fontSize={12} tickLine={false} minTickGap={60} />
               <YAxis yAxisId="left" fontSize={12} tickLine={false} />
               <YAxis yAxisId="right" orientation="right" fontSize={12} tickLine={false} />
               <Tooltip />

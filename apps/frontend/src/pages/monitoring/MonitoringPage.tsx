@@ -34,7 +34,7 @@ export default function MonitoringPage() {
           if (msg.type === 'TELEMETRY_UPDATE' && msg.data) {
             setRealtimeReading(msg.data);
           }
-        } catch {}
+        } catch { }
       };
       ws.onclose = () => {
         setWsStatus('disconnected');
@@ -127,12 +127,12 @@ export default function MonitoringPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="kpi-card">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Presión — Tendencia</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Presión - Tendencia</h3>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={chartData.length > 0 ? chartData : [{ time: '--', presion: 0, caudal: 0 }]}>
               <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0d6ebd" stopOpacity={0.2} /><stop offset="95%" stopColor="#0d6ebd" stopOpacity={0} /></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="time" fontSize={11} tickLine={false} interval={12} />
+              <XAxis dataKey="time" fontSize={11} tickLine={false} minTickGap={60} />
               <YAxis fontSize={11} tickLine={false} />
               <Tooltip />
               <Area type="monotone" dataKey="presion" stroke="#0d6ebd" strokeWidth={2} fill="url(#pg)" name="Presión (MCA)" />
@@ -145,7 +145,7 @@ export default function MonitoringPage() {
             <AreaChart data={chartData.length > 0 ? chartData : [{ time: '--', presion: 0, caudal: 0 }]}>
               <defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.2} /><stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} /></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="time" fontSize={11} tickLine={false} interval={12} />
+              <XAxis dataKey="time" fontSize={11} tickLine={false} minTickGap={60} />
               <YAxis fontSize={11} tickLine={false} />
               <Tooltip />
               <Area type="monotone" dataKey="caudal" stroke="#0ea5e9" strokeWidth={2} fill="url(#fg)" name="Caudal (LPS)" />

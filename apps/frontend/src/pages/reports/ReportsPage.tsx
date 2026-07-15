@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useDailyReport, useWeeklyReport, useCustomReport } from '../../services/hooks';
 import { api } from '../../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area } from 'recharts';
-import { FileText, Download, Calendar, Loader2, TrendingUp, AlertTriangle, Droplets, CheckCircle } from 'lucide-react';
+import { FileText, Download, Calendar, Loader2, TrendingUp, AlertTriangle, Droplets, CheckCircle, FileSpreadsheet, Clock, Settings } from 'lucide-react';
 import clsx from 'clsx';
 
 type Tab = 'daily' | 'weekly' | 'custom';
+type ExportFormat = 'xlsx' | 'pdf' | 'csv';
 
 export default function ReportsPage() {
   const [tab, setTab] = useState<Tab>('daily');
@@ -13,7 +14,8 @@ export default function ReportsPage() {
   const [customStart, setCustomStart] = useState(new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10));
   const [customEnd, setCustomEnd] = useState(new Date().toISOString().slice(0, 10));
   const [generateCustom, setGenerateCustom] = useState(false);
-  const [exportingFormat, setExportingFormat] = useState<'xlsx' | 'pdf' | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
+  const [exportProgress, setExportProgress] = useState<number | null>(null);
 
   const { data: daily, isLoading: dailyLoading } = useDailyReport(date);
   const { data: weekly, isLoading: weeklyLoading } = useWeeklyReport();
@@ -21,23 +23,53 @@ export default function ReportsPage() {
   
   const isLoading = (tab === 'daily' && dailyLoading) || (tab === 'weekly' && weeklyLoading) || (tab === 'custom' && customLoading);
 
-  const handleExport = async (type: 'daily' | 'weekly' | 'custom', format: 'xlsx' | 'pdf') => {
+  // Date validation
+  const isDateValid = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return !isNaN(date.getTime()) && date <= new Date();
+  };
+
+  const isCustomRangeValid = () => {
+    const start = new Date(customStart);
+    const end = new Date(customEnd);
+    const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+    return start <= end && diffDays <= 90 && isDateValid(customStart) && isDateValid(customEnd);
+  };
+
+  const handleExport = async (type: Tab, format: ExportFormat) => {
     try {
       setExportingFormat(format);
-      const res = await api.reports.exportReport(type, format, date, customStart, customEnd);
+      setExportProgress(0);
       
-      const byteCharacters = atob(res.content);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        setExportProgress(prev => {
+          if (prev !== null && prev < 90) {
+            return prev + 10;
+          }
+          return prev;
+        });
+      }, 200);
+
+      let blob: Blob;
+      if (type === 'daily') {
+        blob = await api.reports.exportReportV2('daily', format, date);
+      } else if (type === 'weekly') {
+        blob = await api.reports.exportReportV2('weekly', format);
+      } else {
+        blob = await api.reports.exportReportV2('custom', format, undefined, customStart, customEnd);
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      const mimeType = format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       
-      const blob = new Blob([byteArray], { type: mimeType });
+      clearInterval(progressInterval);
+      setExportProgress(100);
+      
+      // Download file - blob returned directly from API
+      // Note: We can't extract filename from headers since we only get the blob
+      let filename = `${type}_report.${format}`;
+      
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.setAttribute('download', res.filename);
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -46,6 +78,7 @@ export default function ReportsPage() {
       alert('Hubo un error al exportar el reporte. Por favor, inténtelo de nuevo.');
     } finally {
       setExportingFormat(null);
+      setTimeout(() => setExportProgress(null), 1000);
     }
   };
 
@@ -65,10 +98,10 @@ export default function ReportsPage() {
       }))
     : [];
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'daily', label: 'Reporte Diario' },
-    { key: 'weekly', label: 'Reporte Semanal' },
-    { key: 'custom', label: 'Personalizado' },
+  const tabs: { key: Tab; label: string; icon: any }[] = [
+    { key: 'daily', label: 'Reporte Diario', icon: Calendar },
+    { key: 'weekly', label: 'Reporte Semanal', icon: TrendingUp },
+    { key: 'custom', label: 'Personalizado', icon: Settings },
   ];
 
   return (
@@ -82,11 +115,12 @@ export default function ReportsPage() {
         <div className="flex p-1 bg-gray-100 rounded-xl shadow-inner w-full md:w-auto">
           {tabs.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={clsx('flex-1 md:flex-none px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-300',
+              className={clsx('flex-1 md:flex-none px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2',
                 tab === t.key 
                   ? 'bg-white text-primary-600 shadow-sm ring-1 ring-black/5' 
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
               )}>
+              <t.icon className="w-4 h-4" />
               {t.label}
             </button>
           ))}
@@ -100,6 +134,7 @@ export default function ReportsPage() {
             <div className="flex flex-col">
               <label className="text-xs text-gray-400 font-medium">Fecha del Reporte</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                max={new Date().toISOString().slice(0, 10)}
                 className="text-sm font-medium text-gray-800 bg-transparent border-none p-0 focus:ring-0 cursor-pointer outline-none" />
             </div>
           </div>
@@ -224,7 +259,12 @@ export default function ReportsPage() {
                 <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-lg text-white relative overflow-hidden">
                   <Droplets className="absolute right-[-20px] top-[-20px] w-32 h-32 text-white opacity-10" />
                   <p className="text-blue-100 text-sm font-medium mb-1">Volumen de Pérdida Estimada</p>
-                  <p className="text-4xl font-black mb-1">{weekly.water_loss_estimate ?? '--'} <span className="text-xl font-medium opacity-80">m³</span></p>
+                  <p className="text-4xl font-black mb-1">
+                    {weekly?.water_loss_estimate != null && weekly.water_loss_estimate !== undefined
+                      ? `${Number(weekly.water_loss_estimate).toFixed(2)}`
+                      : '0.00'}
+                    <span className="ml-1 text-xl font-medium opacity-80">m³</span>
+                  </p>
                   <p className="text-xs text-blue-200 mt-4 bg-black/10 inline-block px-2 py-1 rounded">Basado en algoritmos de ML</p>
                 </div>
               </div>
@@ -276,16 +316,27 @@ export default function ReportsPage() {
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Fecha Inicial</label>
                       <input type="date" value={customStart} onChange={e => { setCustomStart(e.target.value); setGenerateCustom(false); }} 
+                        max={new Date().toISOString().slice(0, 10)}
                         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Fecha Final</label>
                       <input type="date" value={customEnd} onChange={e => { setCustomEnd(e.target.value); setGenerateCustom(false); }} 
+                        max={new Date().toISOString().slice(0, 10)}
                         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all" />
                     </div>
                   </div>
+                  
+                  {!isCustomRangeValid() && (customStart || customEnd) && (
+                    <div className="text-xs text-red-500 bg-red-50 p-2 rounded-lg">
+                      {new Date(customStart) > new Date(customEnd) && "La fecha de inicio debe ser anterior a la fecha final."}
+                      {(new Date(customEnd).getTime() - new Date(customStart).getTime()) / (1000 * 60 * 60 * 24) > 90 && "El rango no puede exceder 90 días."}
+                    </div>
+                  )}
+                  
                   <button onClick={() => setGenerateCustom(true)} 
-                    className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-bold shadow-md shadow-primary-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                    disabled={!isCustomRangeValid()}
+                    className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-bold shadow-md shadow-primary-500/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
                     Generar Análisis de Datos
                   </button>
                 </div>
@@ -353,6 +404,7 @@ export default function ReportsPage() {
         </div>
       )}
 
+      {/* Export Section */}
       {!isLoading && (
         (tab === 'daily' && daily) || 
         (tab === 'weekly' && weekly) || 
@@ -360,20 +412,44 @@ export default function ReportsPage() {
       ) && (
         <div className="fixed bottom-6 right-6 md:static md:flex md:justify-end gap-3 mt-8 bg-white md:bg-transparent p-4 md:p-0 rounded-2xl shadow-xl md:shadow-none border border-gray-100 md:border-none z-50 flex flex-col md:flex-row">
           <p className="text-xs text-gray-400 font-medium md:hidden mb-2 text-center uppercase tracking-wider">Opciones de Exportación</p>
+          
+          {/* Progress Bar */}
+          {exportProgress !== null && (
+            <div className="w-full mb-3">
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary-500 transition-all duration-300" 
+                  style={{ width: `${exportProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1 text-center">
+                {exportProgress < 100 ? 'Exportando...' : '¡Completado!'}
+              </p>
+            </div>
+          )}
+          
           <button 
-            onClick={() => handleExport(tab as any, 'xlsx')} 
+            onClick={() => handleExport(tab, 'xlsx')} 
             disabled={exportingFormat !== null}
             className="w-full md:w-auto px-6 py-2.5 bg-[#107c41] text-white rounded-xl text-sm font-bold shadow-lg shadow-green-900/20 hover:bg-[#0b5e31] flex items-center justify-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed">
-            {exportingFormat === 'xlsx' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} 
+            {exportingFormat === 'xlsx' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} 
             {exportingFormat === 'xlsx' ? 'Exportando...' : 'Descargar Excel'}
           </button>
           
           <button 
-            onClick={() => handleExport(tab as any, 'pdf')} 
+            onClick={() => handleExport(tab, 'pdf')} 
             disabled={exportingFormat !== null}
             className="w-full md:w-auto px-6 py-2.5 bg-red-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-900/20 hover:bg-red-700 flex items-center justify-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed">
             {exportingFormat === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />} 
             {exportingFormat === 'pdf' ? 'Exportando...' : 'Descargar PDF'}
+          </button>
+          
+          <button 
+            onClick={() => handleExport(tab, 'csv')} 
+            disabled={exportingFormat !== null}
+            className="w-full md:w-auto px-6 py-2.5 bg-gray-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-gray-900/20 hover:bg-gray-700 flex items-center justify-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed">
+            {exportingFormat === 'csv' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} 
+            {exportingFormat === 'csv' ? 'Exportando...' : 'Descargar CSV'}
           </button>
         </div>
       )}
