@@ -16,6 +16,8 @@ class TelemetryResponse(BaseModel):
     quality_flag: str
     temperature: Optional[float] = None
     status: str = "ACTIVE"
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class TelemetryHistoryResponse(BaseModel):

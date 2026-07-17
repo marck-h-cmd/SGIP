@@ -55,6 +55,7 @@ class AnomalyModel(Base):
     telemetry_id = Column(Integer, nullable=False)
     dma_id = Column(String(50), ForeignKey("dmas.code"), nullable=False)
     dma_name = Column(String(100), nullable=False)
+    sensor_id = Column(String(50), nullable=True)  # Sensor where the anomaly was detected
     anomaly_score = Column(Float, nullable=False)
     severity = Column(String(50), nullable=False)  # LOW, MEDIUM, HIGH, CRITICAL
     status = Column(String(50), default="PENDING")  # PENDING, CONFIRMED, REJECTED, RESOLVED

@@ -10,6 +10,7 @@ class DailyReportResponse(BaseModel):
     summary: dict
     anomalies: dict
     incidents: dict
+    readings: List[dict]
     generated_at: str
 
 
@@ -18,8 +19,11 @@ class WeeklyReportResponse(BaseModel):
     period: dict
     dma: str
     daily_stats: List[dict]
+    total_readings: int
     total_anomalies: int
     total_incidents: int
+    water_loss_estimate: float
+    nrw_percentage: float
     anomaly_trend: dict
     incident_trend: dict
     generated_at: str
