@@ -109,35 +109,65 @@ class TelemetryService:
         """Get trends specifically for Moche"""
         return self.get_dma_trends(self.target_dma, hours)
     
-    def get_dma_trends(self, dma_id: str, hours: int = 24) -> Dict[str, List[Dict[str, Any]]]:
-        """Get pressure and flow trends"""
+    def get_dma_trends(self, dma_id: str, hours: int = 24) -> Dict[str, Any]:
+        """Get pressure and flow trends grouped by sensor"""
         end_date = datetime.now(PERU_TZ)
         start_date = end_date - timedelta(hours=hours)
-        
+
         readings = self.get_historical_readings(dma_id, start_date, end_date)
         
-        pressure_data = []
-        flow_data = []
+        # Obtener sensores del provider
+        sensors = []
+        if hasattr(self.provider, 'sensors'):
+            sensors = [s for s in self.provider.sensors if s["dma_id"] == dma_id]
         
+        # Agrupar lecturas por sensor
+        readings_by_sensor: Dict[str, List[TelemetryReading]] = {}
         for reading in readings:
-            pressure_data.append({
-                "timestamp": reading.timestamp.isoformat(),
-                "value": reading.pressure_mca,
-                "dma_id": reading.dma_id,
-                "dma_name": reading.dma_name,
-                "quality": reading.quality_flag
-            })
-            flow_data.append({
-                "timestamp": reading.timestamp.isoformat(),
-                "value": reading.flow_lps,
-                "dma_id": reading.dma_id,
-                "dma_name": reading.dma_name,
-                "quality": reading.quality_flag
-            })
+            if reading.sensor_id not in readings_by_sensor:
+                readings_by_sensor[reading.sensor_id] = []
+            readings_by_sensor[reading.sensor_id].append(reading)
         
+        # Preparar datos por sensor
+        sensors_data = []
+        for sensor in sensors:
+            sensor_readings = readings_by_sensor.get(sensor["code"], [])
+            pressure_data = []
+            flow_data = []
+            
+            for reading in sensor_readings:
+                pressure_data.append({
+                    "timestamp": reading.timestamp.isoformat(),
+                    "value": reading.pressure_mca,
+                    "quality": reading.quality_flag
+                })
+                flow_data.append({
+                    "timestamp": reading.timestamp.isoformat(),
+                    "value": reading.flow_lps,
+                    "quality": reading.quality_flag
+                })
+            
+            sensors_data.append({
+                "sensor_id": sensor["code"],
+                "sensor_name": sensor["name"],
+                "sensor_type": sensor["type"],
+                "latitude": sensor["latitude"],
+                "longitude": sensor["longitude"],
+                "pressure": pressure_data,
+                "flow": flow_data
+            })
+
+        # Also return old structure for backward compatibility (uses first sensor)
+        pressure_data_old = []
+        flow_data_old = []
+        if len(sensors_data) > 0:
+            pressure_data_old = sensors_data[0]["pressure"]
+            flow_data_old = sensors_data[0]["flow"]
+
         return {
-            "pressure": pressure_data,
-            "flow": flow_data,
             "dma_id": dma_id,
-            "dma_name": readings[0].dma_name if readings else "Moche 01"
+            "dma_name": readings[0].dma_name if readings else "Moche 01",
+            "sensors": sensors_data,
+            "pressure": pressure_data_old,
+            "flow": flow_data_old
         }

@@ -24,6 +24,7 @@ class Anomaly(BaseModel):
     telemetry_id: int
     dma_id: str = Field(..., max_length=50)
     dma_name: str = Field(..., max_length=100)
+    sensor_id: Optional[str] = Field(None, max_length=50)  # Sensor where the anomaly was detected
     anomaly_score: float = Field(..., ge=0, le=1)
     severity: AnomalySeverity
     status: AnomalyStatus = Field(default=AnomalyStatus.PENDING)

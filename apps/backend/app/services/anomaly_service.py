@@ -80,10 +80,11 @@ class AnomalyService:
             is_anomaly = reading.pressure_mca < 40.0 or reading.flow_lps > 35.0
             score = 0.8 if is_anomaly else 0.2
 
-        if reading.pressure_mca < 40.0 or reading.flow_lps > 35.0:
-            is_anomaly = True
-            if score < 0.8:
-                score = 1.0
+        # Remove hardcoded override to trust ML model
+        # if reading.pressure_mca < 40.0 or reading.flow_lps > 35.0:
+        #     is_anomaly = True
+        #     if score < 0.8:
+        #         score = 1.0
 
         anomaly_domain = None
         if is_anomaly:
@@ -104,13 +105,14 @@ class AnomalyService:
                 telemetry_id=1,
                 dma_id=reading.dma_id,
                 dma_name=reading.dma_name,
+                sensor_id=reading.sensor_id,  # Save the sensor ID
                 anomaly_score=score,
                 severity=severity.value,
                 status=AnomalyStatus.PENDING.value,
                 pressure_variation=pressure_var,
                 flow_variation=flow_var,
                 estimated_loss_volume=loss_estimate,
-                description=f"Variación hidráulica: Presión ({pressure_var:.1f} MCA), Caudal ({flow_var:.1f} LPS)"
+                description=f"Variación hidráulica: Presión ({pressure_var:.1f} MCA), Caudal ({flow_var:.1f} LPS) en sensor {reading.sensor_id}"
             )
             saved = self.anomaly_repo.create(anomaly_model)
             
@@ -119,6 +121,7 @@ class AnomalyService:
                 telemetry_id=saved.telemetry_id,
                 dma_id=saved.dma_id,
                 dma_name=saved.dma_name,
+                sensor_id=saved.sensor_id,  # Include sensor ID in domain model
                 anomaly_score=saved.anomaly_score,
                 severity=AnomalySeverity(saved.severity),
                 status=AnomalyStatus(saved.status),
@@ -186,6 +189,7 @@ class AnomalyService:
                 telemetry_id=a.telemetry_id,
                 dma_id=a.dma_id,
                 dma_name=a.dma_name,
+                sensor_id=a.sensor_id,
                 anomaly_score=a.anomaly_score,
                 severity=AnomalySeverity(a.severity),
                 status=AnomalyStatus(a.status),
@@ -253,6 +257,10 @@ class AnomalyService:
             final_pressure = base_pressure + pressure_delta
             final_flow = base_flow + flow_delta
             
+            # Seleccionar sensor aleatorio para la anomalía
+            sensors = ["SENS-MO-01-P", "SENS-MO-01-F", "SENS-MO-02-P", "SENS-MO-02-F", "SENS-MO-03-P", "SENS-MO-03-F"]
+            selected_sensor = random.choice(sensors)
+            
             # Score de anomalía coherente con severidad
             score_map = {"CRITICAL": 0.92, "HIGH": 0.82, "MEDIUM": 0.68, "LOW": 0.45}
             base_score = score_map.get(severity, 0.6)
@@ -266,6 +274,7 @@ class AnomalyService:
                 f"[{scenario.code}] {scenario.name}\n"
                 f"Efecto: Presión {pressure_delta:+.1f} MCA (final: {final_pressure:.1f}), "
                 f"Caudal {flow_delta:+.1f} LPS (final: {final_flow:.1f})\n"
+                f"Sensor: {selected_sensor}\n"
                 f"Causa probable: {scenario.root_cause}\n"
                 f"Pérdida estimada: {estimated_loss:.1f} m³/h"
             )
@@ -282,6 +291,7 @@ class AnomalyService:
                 telemetry_id=random.randint(1, 100),
                 dma_id=dma_id,
                 dma_name="Moche 01",
+                sensor_id=selected_sensor,
                 anomaly_score=anomaly_score,
                 severity=severity,
                 status=status,

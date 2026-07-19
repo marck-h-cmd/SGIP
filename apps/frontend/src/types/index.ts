@@ -31,6 +31,8 @@ export interface TelemetryReading {
   flow_lps: number;
   source: string;
   quality_flag: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Anomaly {
@@ -38,6 +40,7 @@ export interface Anomaly {
   telemetry_id: number;
   dma_id: string;
   dma_name: string;
+  sensor_id?: string;
   anomaly_score: number;
   severity: string;
   status: string;

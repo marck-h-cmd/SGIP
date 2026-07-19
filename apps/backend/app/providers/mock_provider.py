@@ -21,35 +21,98 @@ class MockTelemetryProvider(TelemetryProvider):
             "code": "DMA-MO-01",
             "name": "Moche 01",
             "district": "Moche",
-            "latitude": -8.1243,
-            "longitude": -79.0142,
+            "latitude": -8.1700,
+            "longitude": -79.0050,
             "base_pressure": self.PRESSURE_BASELINE,
             "base_flow": self.FLOW_BASELINE,
             "population": 18000,
             "description": "Sector Moche - Zona urbana principal"
         }]
 
+        # Sensores posicionados entre Moche y Salaverry
         self.sensors = [
             {
                 "code": "SENS-MO-01-P",
                 "dma_id": "DMA-MO-01",
-                "name": "Sensor de Presión Moche 01",
+                "name": "Sensor de Presión Moche - Inicio",
                 "type": "PRESSURE",
                 "unit": "MCA",
                 "status": "ACTIVE",
-                "latitude": -8.1243,
-                "longitude": -79.0142
+                "latitude": -8.1700,
+                "longitude": -79.0050,
+                "base_pressure": 58.5,
+                "base_flow": 26.0
             },
             {
                 "code": "SENS-MO-01-F",
                 "dma_id": "DMA-MO-01",
-                "name": "Sensor de Caudal Moche 01",
+                "name": "Sensor de Caudal Moche - Inicio",
                 "type": "FLOW",
                 "unit": "LPS",
                 "status": "ACTIVE",
-                "latitude": -8.1245,
-                "longitude": -79.0140
+                "latitude": -8.1800,
+                "longitude": -79.0150,
+                "base_pressure": 58.2,
+                "base_flow": 25.8
+            },
+            {
+                "code": "SENS-MO-02-P",
+                "dma_id": "DMA-MO-01",
+                "name": "Sensor de Presión Medio 1",
+                "type": "PRESSURE",
+                "unit": "MCA",
+                "status": "ACTIVE",
+                "latitude": -8.1900,
+                "longitude": -79.0100,
+                "base_pressure": 55.3,
+                "base_flow": 24.5
+            },
+            {
+                "code": "SENS-MO-02-F",
+                "dma_id": "DMA-MO-01",
+                "name": "Sensor de Caudal Medio 1",
+                "type": "FLOW",
+                "unit": "LPS",
+                "status": "ACTIVE",
+                "latitude": -8.2000,
+                "longitude": -78.9950,
+                "base_pressure": 54.0,
+                "base_flow": 24.3
+            },
+            {
+                "code": "SENS-MO-03-P",
+                "dma_id": "DMA-MO-01",
+                "name": "Sensor de Presión Medio 2",
+                "type": "PRESSURE",
+                "unit": "MCA",
+                "status": "ACTIVE",
+                "latitude": -8.2100,
+                "longitude": -78.9820,
+                "base_pressure": 53.8,
+                "base_flow": 25.0
+            },
+            {
+                "code": "SENS-MO-03-F",
+                "dma_id": "DMA-MO-01",
+                "name": "Sensor de Caudal Salaverry - Fin",
+                "type": "FLOW",
+                "unit": "LPS",
+                "status": "ACTIVE",
+                "latitude": -8.2300,
+                "longitude": -78.9700,
+                "base_pressure": 52.5,
+                "base_flow": 24.8
             }
+        ]
+
+        # Coordenadas de la ruta (solo sensores, de inicio a fin)
+        self.route_coords = [
+            [-8.1700, -79.0050],  # SENS-MO-01-P
+            [-8.1800, -79.0150],  # SENS-MO-01-F
+            [-8.1900, -79.0100],  # SENS-MO-02-P
+            [-8.2000, -78.9950],  # SENS-MO-02-F
+            [-8.2100, -78.9820],  # SENS-MO-03-P
+            [-8.2300, -78.9700],  # SENS-MO-03-F
         ]
         self._base_readings = self._generate_base_readings()
         self._leak_scenario_active = False
@@ -63,14 +126,17 @@ class MockTelemetryProvider(TelemetryProvider):
     def _generate_base_readings(self):
         readings = []
         for dma in self.dmas:
-            readings.append({
-                "dma_id": dma["code"],
-                "dma_name": dma["name"],
-                "sensor_id": "SENS-MO-01-P",
-                "pressure_mca": dma["base_pressure"],
-                "flow_lps": dma["base_flow"],
-                "source": "MOCK"
-            })
+            # Generar lectura base para cada sensor
+            sensors = [s for s in self.sensors if s["dma_id"] == dma["code"]]
+            for sensor in sensors:
+                readings.append({
+                    "dma_id": dma["code"],
+                    "dma_name": dma["name"],
+                    "sensor_id": sensor["code"],
+                    "pressure_mca": dma["base_pressure"],
+                    "flow_lps": dma["base_flow"],
+                    "source": "MOCK"
+                })
         return readings
 
     def _round_time(self, dt: Optional[datetime] = None) -> datetime:
@@ -89,15 +155,28 @@ class MockTelemetryProvider(TelemetryProvider):
         for dma in self.dmas:
             dma_id = dma["code"]
             readings = []
+            sensors = [s for s in self.sensors if s["dma_id"] == dma_id]
             current = start
             while current <= now:
-                readings.append(self._generate_reading_at_time(dma, current))
+                for sensor in sensors:
+                    readings.append(self._generate_reading_at_time(dma, sensor, current))
                 current += interval
             self._historical_cache[dma_id] = readings
             self._last_reading_time[dma_id] = now
 
-    def _generate_reading_at_time(self, dma: dict, timestamp: datetime) -> TelemetryReading:
-        """Generar lectura realista con patrón diario de consumo"""
+    def _calculate_distance_km(self, lat1, lon1, lat2, lon2):
+        """Calculate distance in km between two points using Haversine formula"""
+        R = 6371.0  # Earth radius in km
+        phi1 = np.radians(lat1)
+        phi2 = np.radians(lat2)
+        delta_phi = np.radians(lat2 - lat1)
+        delta_lambda = np.radians(lon2 - lon1)
+        a = np.sin(delta_phi / 2)**2 + \
+            np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda / 2)**2
+        return R * (2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a)))
+
+    def _generate_reading_at_time(self, dma: dict, sensor: dict, timestamp: datetime) -> TelemetryReading:
+        """Generar lectura realista con patrón diario de consumo para un sensor específico"""
         hour = timestamp.hour + (timestamp.minute / 60.0)
 
         # Patrón diario de consumo (agua):
@@ -109,8 +188,11 @@ class MockTelemetryProvider(TelemetryProvider):
         flow_factor = 1.0 + 0.45 * np.sin(angle) + 0.10 * np.sin(2 * angle)
         pressure_factor = 1.0 - 0.04 * np.sin(angle)
 
-        raw_flow = dma["base_flow"] * flow_factor + random.gauss(0, 0.4)
-        raw_pressure = dma["base_pressure"] * pressure_factor + random.gauss(0, 0.3)
+        # Añadir variación entre sensores para hacerlos únicos
+        sensor_offset = hash(sensor["code"]) % 100 / 1000  # Offset único por sensor
+        
+        raw_flow = sensor["base_flow"] * flow_factor + random.gauss(0, 0.4) + sensor_offset * 5
+        raw_pressure = sensor["base_pressure"] * pressure_factor + random.gauss(0, 0.3) - sensor_offset * 3
 
         quality = "SUSPICIOUS" if random.random() < 0.005 else "GOOD"
 
@@ -118,11 +200,13 @@ class MockTelemetryProvider(TelemetryProvider):
             timestamp=timestamp,
             dma_id=dma["code"],
             dma_name=dma["name"],
-            sensor_id="SENS-MO-01-P",
+            sensor_id=sensor["code"],
             pressure_mca=round(max(25, raw_pressure), 1),
             flow_lps=round(max(8, raw_flow), 1),
             source="MOCK",
-            quality_flag=quality
+            quality_flag=quality,
+            latitude=sensor["latitude"],
+            longitude=sensor["longitude"]
         )
 
     def _simulate_leak(self, dma: dict) -> bool:
@@ -132,6 +216,10 @@ class MockTelemetryProvider(TelemetryProvider):
                 self._leak_scenario_active = True
                 self._leak_start_time = datetime.now(PERU_TZ)
                 self._leak_severity = random.uniform(0.3, 0.8)
+                # Random leak location near one of the sensors or between them
+                leak_sensor = random.choice([s for s in self.sensors if s["dma_id"] == dma["code"]])
+                self._leak_latitude = leak_sensor["latitude"] + random.gauss(0, 0.001)
+                self._leak_longitude = leak_sensor["longitude"] + random.gauss(0, 0.001)
             return False
 
         elapsed = (datetime.now(PERU_TZ) - self._leak_start_time).total_seconds() / 60
@@ -139,11 +227,13 @@ class MockTelemetryProvider(TelemetryProvider):
             self._leak_scenario_active = False
             self._leak_start_time = None
             self._leak_severity = 0.0
+            self._leak_latitude = None
+            self._leak_longitude = None
             return False
         return True
 
     def get_latest_readings(self, dma_id: Optional[str] = None) -> List[TelemetryReading]:
-        """Obtener última lectura y agregar nuevos puntos pendientes al caché"""
+        """Obtener última lectura de cada sensor y agregar nuevos puntos pendientes al caché"""
         current_time = self._round_time()
         interval = timedelta(minutes=settings.reading_interval_minutes)
 
@@ -156,36 +246,67 @@ class MockTelemetryProvider(TelemetryProvider):
             if last_time is None:
                 last_time = current_time - timedelta(hours=24)
 
+            # Obtener sensores del DMA
+            sensors = [s for s in self.sensors if s["dma_id"] == dma["code"]]
+            
             # Generar todos los puntos faltantes desde last_time hasta current_time
             next_time = last_time + interval
             leak_active = self._simulate_leak(dma)
+            
             while next_time <= current_time:
-                r = self._generate_reading_at_time(dma, next_time)
-                if leak_active and next_time >= self._leak_start_time:
-                    elapsed = (next_time - self._leak_start_time).total_seconds() / 60
-                    progress = min(1.0, elapsed / 45)
-                    intensity = progress * self._leak_severity
-                    r = TelemetryReading(
-                        timestamp=r.timestamp,
-                        dma_id=r.dma_id,
-                        dma_name=r.dma_name,
-                        sensor_id=r.sensor_id,
-                        pressure_mca=round(max(25, r.pressure_mca - min(r.pressure_mca * 0.18 * intensity, 14.0)), 1),
-                        flow_lps=round(max(8, r.flow_lps + min(r.flow_lps * 0.30 * intensity, 20.0)), 1),
-                        source="MOCK",
-                        quality_flag="ANOMALY"
-                    )
-                self._historical_cache.setdefault(dma["code"], []).append(r)
+                for sensor in sensors:
+                    r = self._generate_reading_at_time(dma, sensor, next_time)
+                    # Aplicar fuga a todos los sensores con un gradiente según la distancia
+                    if leak_active and next_time >= self._leak_start_time:
+                        elapsed = (next_time - self._leak_start_time).total_seconds() / 60
+                        progress = min(1.0, elapsed / 45)
+                        base_intensity = progress * self._leak_severity
+                        
+                        # Calculate distance from sensor to leak
+                        distance = self._calculate_distance_km(
+                            sensor["latitude"], sensor["longitude"],
+                            self._leak_latitude, self._leak_longitude
+                        )
+                        
+                        # Distance factor: closer sensors are more affected (inverse distance)
+                        # Max effect at 0 distance, effect drops to 20% at 1km
+                        distance_factor = np.exp(-distance * 5.0)  # 5.0 is a decay constant
+                        intensity = base_intensity * (0.2 + 0.8 * distance_factor)
+                        
+                        # Apply leak effect: pressure drops, flow increases
+                        new_pressure = r.pressure_mca - min(r.pressure_mca * 0.25 * intensity, 18.0)
+                        new_flow = r.flow_lps + min(r.flow_lps * 0.35 * intensity, 25.0)
+                        
+                        # Set quality flag to ANOMALY for sensors with significant effect
+                        quality_flag = "ANOMALY" if intensity > 0.15 else r.quality_flag
+                        
+                        r = TelemetryReading(
+                            timestamp=r.timestamp,
+                            dma_id=r.dma_id,
+                            dma_name=r.dma_name,
+                            sensor_id=sensor["code"],
+                            pressure_mca=round(max(25, new_pressure), 1),
+                            flow_lps=round(max(8, new_flow), 1),
+                            source="MOCK",
+                            quality_flag=quality_flag,
+                            latitude=sensor["latitude"],
+                            longitude=sensor["longitude"]
+                        )
+                    self._historical_cache.setdefault(dma["code"], []).append(r)
                 next_time += interval
 
             self._last_reading_time[dma["code"]] = current_time
 
-        # Devolver la última lectura de cada DMA solicitado
+        # Devolver la última lectura de cada sensor
         result = []
         for dma in selected:
             cache = self._historical_cache.get(dma["code"], [])
-            if cache:
-                result.append(cache[-1])
+            sensors = [s for s in self.sensors if s["dma_id"] == dma["code"]]
+            # Para cada sensor, encontrar su última lectura
+            for sensor in sensors:
+                sensor_readings = [r for r in cache if r.sensor_id == sensor["code"]]
+                if sensor_readings:
+                    result.append(sensor_readings[-1])
         return result
     
     def get_historical_readings(

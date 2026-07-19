@@ -16,6 +16,8 @@ class TelemetryReading(BaseModel):
     quality_flag: str = Field(default="GOOD", max_length=20)
     temperature: Optional[float] = None
     status: str = Field(default="ACTIVE", max_length=20)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     class Config:
